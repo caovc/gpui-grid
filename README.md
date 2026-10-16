@@ -4,6 +4,8 @@ An independent, AG Grid-inspired data-grid component. **The website now runs the
 
 The GPUI Kit browser backend is currently **showcase-only / experimental**; do not assume full production browser, accessibility or mobile input support.
 
+🧪 [Real GPUI WASM browser E2E tests](docs/BROWSER_E2E.md) · 📋 [Development roadmap / 后续开发路线图](docs/ROADMAP.md) · [Tracking epic #1](https://github.com/caovc/gpui-grid/issues/1) · [Current issues](https://github.com/caovc/gpui-grid/issues)
+
 ## Source layout
 
 ```text

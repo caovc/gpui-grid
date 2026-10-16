@@ -13,6 +13,13 @@ mod wasm {
         static APPLICATION: RefCell<Option<ApplicationHandle>> = const { RefCell::new(None) };
     }
 
+    /// Read-only test/diagnostic snapshot of the real GPUI grid's current row
+    /// count. The counter is maintained by native Rust event handlers.
+    #[wasm_bindgen]
+    pub fn preview_visible_rows() -> u32 {
+        gpui_grid::showcase::preview_visible_rows() as u32
+    }
+
     #[wasm_bindgen]
     pub fn run() -> Result<(), JsValue> {
         console_error_panic_hook::set_once();

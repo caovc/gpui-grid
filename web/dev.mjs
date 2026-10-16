@@ -2,7 +2,9 @@ import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {resolve,join,sep,extname} from 'node:path';
 import {fileURLToPath} from 'node:url';
-const dir=fileURLToPath(new URL('./dist/',import.meta.url));
+// fileURLToPath on a directory URL retains a trailing slash; path.resolve
+// normalizes it so the containment check does not accidentally require // .
+const dir=resolve(fileURLToPath(new URL('./dist/',import.meta.url)));
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm'};
 const port=Number(process.env.PORT||4173);
 createServer(async(req,res)=>{

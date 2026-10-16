@@ -5,6 +5,27 @@ use gpui_kit::base::StyledExt;
 use gpui_kit::component::table::{DataTable, TableState};
 use gpui_kit::component::button::Button;
 
+// Diagnostic hook for the browser smoke test. It is updated by the *real*
+// GPUI button handlers, so the test verifies UI input instead of calling an
+// alternative JavaScript table/filter implementation.
+#[cfg(target_family = "wasm")]
+thread_local! {
+    static PREVIEW_VISIBLE_ROWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn publish_visible_rows(count: usize) {
+    #[cfg(target_family = "wasm")]
+    PREVIEW_VISIBLE_ROWS.with(|rows| rows.set(count));
+    #[cfg(not(target_family = "wasm"))]
+    let _ = count;
+}
+
+#[cfg(target_family = "wasm")]
+pub fn preview_visible_rows() -> usize {
+    PREVIEW_VISIBLE_ROWS.with(std::cell::Cell::get)
+}
+
+
 pub struct GridShowcase {
     table: Entity<TableState<GridDelegate>>,
 }
@@ -28,13 +49,17 @@ impl Render for GridShowcase {
                         div().flex().gap_2()
                             .child(Button::new("completed-only").label("Completed only").on_click(move |_, _, cx| {
                                 only_completed.update(cx, |table, cx| {
-                                    table.delegate_mut().set_quick_filter("Completed");
+                                    let delegate = table.delegate_mut();
+                                    delegate.set_quick_filter("Completed");
+                                    publish_visible_rows(delegate.row_count());
                                     table.refresh(cx);
                                 });
                             }))
                             .child(Button::new("all-rows").label("All rows").on_click(move |_, _, cx| {
                                 show_all.update(cx, |table, cx| {
-                                    table.delegate_mut().set_quick_filter("");
+                                    let delegate = table.delegate_mut();
+                                    delegate.set_quick_filter("");
+                                    publish_visible_rows(delegate.row_count());
                                     table.refresh(cx);
                                 });
                             }))
@@ -51,8 +76,10 @@ impl Render for GridShowcase {
 impl GridShowcase {
     /// A shared Rust view: the native desktop and wasm32 browser run this same code.
     pub fn new(window: &mut Window, cx: &mut App) -> Entity<Self> {
+        let data = sample_orders(12_480);
+        publish_visible_rows(data.len());
         let table = cx.new(|cx| {
-            TableState::new(GridDelegate::new(sample_orders(12_480)), window, cx)
+            TableState::new(GridDelegate::new(data), window, cx)
                 .cell_selectable(true)
                 .row_selectable(true)
                 .col_resizable(true)

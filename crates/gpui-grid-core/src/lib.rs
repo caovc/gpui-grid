@@ -5,6 +5,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 
+mod state;
+pub use state::{CellAddress, ColumnState, GridApi, GridEvent, GridOptions, GridState, PinSide};
+
 /// Typed value; use numbers for numeric sorting, not formatted strings.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -90,6 +93,7 @@ pub enum GridError {
     UnknownRow(u64),
     ReadOnly(String),
     InvalidValue(String),
+    InvalidColumnWidth(String),
 }
 impl Display for GridError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { write!(f, "{self:?}") }
@@ -111,9 +115,9 @@ pub struct GridModel {
     pub columns: Vec<Column>,
     rows: Vec<Row>,
     id_to_index: HashMap<u64, usize>,
-    pub quick_filter: String,
-    pub filters: Vec<Filter>,
-    pub sorts: Vec<Sort>,
+    /// Single source of truth for presentation and query state.
+    pub state: GridState,
+    pending_events: Vec<GridEvent>,
 }
 impl GridModel {
     pub fn new(columns: Vec<Column>, rows: Vec<Row>) -> Result<Self, GridError> {
@@ -126,7 +130,8 @@ impl GridModel {
             if row.cells.len() != columns.len() { return Err(GridError::MismatchedColumns(row.id)); }
             if id_to_index.insert(row.id, ix).is_some() { return Err(GridError::DuplicateRowId(row.id)); }
         }
-        Ok(Self { columns, rows, id_to_index, quick_filter: String::new(), filters: Vec::new(), sorts: Vec::new() })
+        let state = GridState::new(&columns);
+        Ok(Self { columns, rows, id_to_index, state, pending_events: Vec::new() })
     }
     pub fn len(&self) -> usize { self.rows.len() }
     pub fn is_empty(&self) -> bool { self.rows.is_empty() }
@@ -136,18 +141,84 @@ impl GridModel {
     pub fn value(&self, row_index: usize, column_key: &str) -> Option<&Value> {
         self.column_index(column_key).and_then(|col|self.rows.get(row_index)?.cells.get(col))
     }
-    pub fn set_quick_filter(&mut self, query: impl Into<String>) { self.quick_filter=query.into(); }
+    /// Stateful command façade; operations are validated and eventful.
+    pub fn api(&mut self) -> GridApi<'_> { GridApi::new(self) }
+    /// Read-only view of authoritative runtime state.
+    pub fn state(&self) -> &GridState { &self.state }
+    /// Drain ordered events to deliver them to a UI/application event bus.
+    pub fn drain_events(&mut self) -> Vec<GridEvent> { std::mem::take(&mut self.pending_events) }
+
+    pub fn set_quick_filter(&mut self, query: impl Into<String>) {
+        let next = query.into();
+        if self.state.quick_filter != next {
+            self.state.quick_filter = next.clone();
+            self.pending_events.push(GridEvent::QuickFilterChanged(next));
+        }
+    }
     pub fn set_filters(&mut self, filters: Vec<Filter>) -> Result<(), GridError> {
         for f in &filters { if self.column_index(&f.column).is_none() {return Err(GridError::UnknownColumn(f.column.clone()));} }
-        self.filters = filters; Ok(())
+        if self.state.filters != filters {
+            self.state.filters = filters.clone();
+            self.pending_events.push(GridEvent::FiltersChanged(filters));
+        }
+        Ok(())
     }
     pub fn set_sorts(&mut self, sorts: Vec<Sort>) -> Result<(), GridError> {
         for s in &sorts { if self.column_index(&s.column).is_none() {return Err(GridError::UnknownColumn(s.column.clone()));} }
-        self.sorts = sorts; Ok(())
+        if self.state.sorts != sorts {
+            self.state.sorts = sorts.clone();
+            self.pending_events.push(GridEvent::SortChanged(sorts));
+        }
+        Ok(())
+    }
+    /// Move presentation order only; typed row storage remains unchanged.
+    pub fn move_column(&mut self, key: &str, to: usize) -> Result<(), GridError> {
+        let from = self.state.columns.iter().position(|col| col.key == key)
+            .ok_or_else(|| GridError::UnknownColumn(key.to_owned()))?;
+        let destination = to.min(self.state.columns.len().saturating_sub(1));
+        if from != destination {
+            let col = self.state.columns.remove(from);
+            self.state.columns.insert(destination, col);
+            self.pending_events.push(GridEvent::ColumnMoved {key: key.into(), from, to: destination});
+        }
+        Ok(())
+    }
+    pub fn set_column_visible(&mut self, key: &str, visible: bool) -> Result<(), GridError> {
+        let column = self.state.columns.iter_mut().find(|col| col.key == key)
+            .ok_or_else(|| GridError::UnknownColumn(key.to_owned()))?;
+        if column.visible != visible {
+            column.visible = visible;
+            self.pending_events.push(GridEvent::ColumnVisibilityChanged {key: key.into(), visible});
+        }
+        Ok(())
+    }
+    pub fn set_column_width(&mut self, key: &str, width: f32) -> Result<(), GridError> {
+        if !width.is_finite() || width < 40.0 || width > 2_000.0 {
+            return Err(GridError::InvalidColumnWidth(key.to_owned()));
+        }
+        let column = self.state.columns.iter_mut().find(|col| col.key == key)
+            .ok_or_else(|| GridError::UnknownColumn(key.to_owned()))?;
+        if column.width != width {
+            column.width = width;
+            self.pending_events.push(GridEvent::ColumnWidthChanged {key: key.into(), width});
+        }
+        Ok(())
+    }
+    /// Focus is an optional stable row ID + column key, never a sorted index.
+    pub fn focus_cell(&mut self, next: Option<CellAddress>) -> Result<(), GridError> {
+        if let Some(cell) = &next {
+            if !self.id_to_index.contains_key(&cell.row_id) {return Err(GridError::UnknownRow(cell.row_id));}
+            if self.column_index(&cell.column_key).is_none() {return Err(GridError::UnknownColumn(cell.column_key.clone()));}
+        }
+        if self.state.focus != next {
+            let previous = std::mem::replace(&mut self.state.focus, next.clone());
+            self.pending_events.push(GridEvent::FocusChanged {previous, current: next});
+        }
+        Ok(())
     }
     pub fn view(&self) -> Vec<usize> {
-        let quick=self.quick_filter.trim().to_lowercase();
-        let selected: Vec<(usize, &Filter)> = self.filters.iter().filter_map(|f|self.column_index(&f.column).map(|ix|(ix,f))).collect();
+        let quick=self.state.quick_filter.trim().to_lowercase();
+        let selected: Vec<(usize, &Filter)> = self.state.filters.iter().filter_map(|f|self.column_index(&f.column).map(|ix|(ix,f))).collect();
         let mut indices = (0..self.rows.len()).filter(|&ix| {
             let row=&self.rows[ix];
             if !quick.is_empty() && !row.cells.iter().any(|cell|cell.contains_case_insensitive(&quick)) {return false;}
@@ -161,7 +232,7 @@ impl GridModel {
                 }
             })
         }).collect::<Vec<_>>();
-        let sorts: Vec<(usize,bool)> = self.sorts.iter().filter_map(|s|self.column_index(&s.column).map(|ix|(ix,s.descending))).collect();
+        let sorts: Vec<(usize,bool)> = self.state.sorts.iter().filter_map(|s|self.column_index(&s.column).map(|ix|(ix,s.descending))).collect();
         if !sorts.is_empty() {
             // sort_by is stable; original order survives for equal values.
             indices.sort_by(|&a,&b| {
@@ -203,6 +274,10 @@ impl GridModel {
             checked.push((ix,col));
         }
         for (edit,(ix,col)) in edits.iter().zip(checked) {self.rows[ix].cells[col]=edit.value.clone();}
+        if !edits.is_empty() {
+            self.pending_events.push(GridEvent::CellsEdited(edits.iter().map(|edit|
+                CellAddress::new(edit.row_id, &edit.column)).collect()));
+        }
         Ok(edits.len())
     }
     pub fn export_csv(&self, row_indices: &[usize], column_keys: &[&str]) -> Result<String,GridError> {

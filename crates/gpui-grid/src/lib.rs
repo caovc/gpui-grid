@@ -13,7 +13,10 @@ use gpui_kit::component::table::{
     Column as UiColumn, ColumnSort, TableDelegate, TableState,
 };
 
-pub use gpui_grid_core::{Column as GridColumn, DataType, Edit, Filter, FilterOp, Row, sample_orders};
+pub use gpui_grid_core::{
+    CellAddress, Column as GridColumn, ColumnState, DataType, Edit, Filter, FilterOp,
+    GridApi, GridEvent, GridOptions, GridState, PinSide, Row, sample_orders,
+};
 
 /// Use `cx.new(|cx| TableState::new(GridDelegate::new(model), window, cx))`
 /// to instantiate the GPUI state. `DataTable::new(&entity)` performs native
@@ -26,13 +29,16 @@ pub struct GridDelegate {
 
 impl GridDelegate {
     pub fn new(model: GridModel) -> Self {
-        let presentation = model.columns.iter().map(|col| {
+        // GPUI elements are a transient cache; GridModel.state owns the order,
+        // width, pin and visibility independently of the virtual viewport.
+        let presentation = model.state.columns.iter().filter(|col| col.visible).map(|state| {
+            let col = &model.columns[model.column_index(&state.key).expect("state column key validated")];
             let base = UiColumn::new(col.key.clone(), col.name.clone())
-                .width(px(col.width))
+                .width(px(state.width))
                 .min_width(px(76.0))
                 .max_width(px(580.0))
                 .sortable();
-            if col.pinned { base.fixed_left() } else { base }
+            if state.pin == PinSide::Left { base.fixed_left() } else { base }
         }).collect();
         let visible = model.view();
         Self { model, presentation, visible }
@@ -145,6 +151,9 @@ impl TableDelegate for GridDelegate {
         if col_ix >= self.presentation.len() || to_ix >= self.presentation.len() { return; }
         let column=self.presentation.remove(col_ix);
         self.presentation.insert(to_ix,column);
+        // Keep the authoritative column state in sync with GPUI's drag order.
+        let moved_key = self.presentation[to_ix].key.to_string();
+        let _ = self.model.move_column(&moved_key, to_ix);
     }
 
     fn cell_text(&self, row_ix: usize, col_ix: usize, _cx: &App) -> String {

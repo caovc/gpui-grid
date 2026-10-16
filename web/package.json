@@ -7,6 +7,11 @@
   "scripts": {
     "dev": "node dev.mjs",
     "test": "node --test *.test.mjs",
+    "test:e2e": "playwright test --config=playwright.config.mjs",
     "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "pngjs": "7.0.0"
   }
 }

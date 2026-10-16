@@ -64,3 +64,34 @@ jobs:
           name: gpui-grid-wasm-preview
           path: web/dist
           retention-days: 14
+
+  browser-e2e:
+    name: Genuine GPUI WASM · Chromium software GPU smoke
+    runs-on: ubuntu-latest
+    needs: wasm-gpui
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: gpui-grid-wasm-preview
+          path: web/dist
+      - name: Install browser test dependencies
+        run: npm --prefix web install --no-audit --no-fund
+      - name: Install Playwright Chromium and system libraries
+        run: ./web/node_modules/.bin/playwright install --with-deps chromium
+      - name: Run actual GPUI canvas and click smoke test
+        run: npm --prefix web run test:e2e
+      - name: Preserve GPU logs, screenshots and traces on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpui-browser-smoke-evidence
+          path: |
+            web/test-results/
+            web/playwright-report/
+          if-no-files-found: warn
+          retention-days: 14

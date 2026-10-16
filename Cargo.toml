@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/gpui-grid-core", "crates/gpui-grid", "examples/native"]
+members = ["crates/gpui-grid-core", "crates/gpui-grid", "examples/native", "crates/gpui-grid-web"]
 default-members = ["crates/gpui-grid-core"]
 resolver = "2"
 

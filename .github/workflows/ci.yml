@@ -1,4 +1,4 @@
-name: CI · Rust and Browser
+name: CI · Rust Native and Real GPUI WASM
 
 on:
   push:
@@ -11,39 +11,56 @@ permissions:
 
 jobs:
   rust-core:
-    name: Rust core · tests + check
+    name: Rust core · tests and check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Run UI-neutral data engine tests
-        run: cargo test -p gpui-grid-core --all-targets
-      - name: Validate core compilation
-        run: cargo check -p gpui-grid-core
-
-  browser-preview:
-    name: Browser preview · unit tests + build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Test viewport, filters, sorting, grouping and CSV
-        run: npm --prefix web test
-      - name: Build static preview
-        run: npm --prefix web run build
-      - name: Validate output
-        run: test -s web/dist/index.html && test -s web/dist/main.js && test -s web/dist/standalone.html
+      - run: cargo test -p gpui-grid-core --all-targets
+      - run: cargo check -p gpui-grid-core
 
   native-gpui:
-    name: GPUI component + desktop app · macOS
+    name: GPUI native component and desktop · macOS
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Compile native GPUI library and demo
-        run: cargo check -p gpui-grid -p gpui-grid-native
+      - run: cargo check -p gpui-grid -p gpui-grid-native
+
+  wasm-gpui:
+    name: GPUI WebPlatform · actual wasm32 build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: gpui-web-wasm32
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.121
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify web host contracts
+        run: npm --prefix web test
+      - name: Compile actual GPUI component for WebAssembly
+        run: ./scripts/build-wasm.sh --release
+      - name: Package real GPUI canvas host and wasm-bindgen files
+        run: npm --prefix web run build
+      - name: Verify generated package is a real WASM module
+        run: |
+          test -s web/dist/viewer/pkg/gpui_grid_web_bg.wasm
+          test -s web/dist/viewer/pkg/gpui_grid_web.js
+          file web/dist/viewer/pkg/gpui_grid_web_bg.wasm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gpui-grid-wasm-preview
+          path: web/dist
+          retention-days: 14

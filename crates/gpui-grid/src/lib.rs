@@ -153,3 +153,7 @@ impl TableDelegate for GridDelegate {
         }).map(Value::text).unwrap_or_default()
     }
 }
+
+/// One GPUI Render tree for both native and WebAssembly targets.
+pub mod showcase;
+pub use showcase::GridShowcase;

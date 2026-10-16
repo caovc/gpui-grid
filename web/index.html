@@ -1,119 +1,32 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="color-scheme" content="light dark" />
-  <meta name="description" content="GPUI Grid — interactive native data-grid component showcase. AG Grid Quartz-inspired visuals and enterprise table interactions." />
-  <title>GPUI Grid — Interactive Component Playground</title>
-  <link rel="stylesheet" href="./styles.css" />
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="description" content="Live GPUI Grid component preview: the very same Rust/GPUI view compiled to WebAssembly for the browser." />
+<title>GPUI Grid · Rust / WebAssembly Component Lab</title>
+<link rel="stylesheet" href="./styles.css" />
 </head>
-<body class="theme-light">
-  <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden">
-    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></symbol>
-    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18M7 17v-4M12 17V9M17 17V6"/></symbol>
-    <symbol id="i-palette" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="9" r="1"/><circle cx="13" cy="7" r="1"/><circle cx="17" cy="11" r="1"/><path d="M12 21a4 4 0 0 1 0-8h1a2 2 0 0 0 2-2"/></symbol>
-    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
-    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 13.5v-3l2-1.5-2-3.5-2.5 1a7 7 0 0 0-2.5-1.5L13.5 2h-4l-.5 3a7 7 0 0 0-2.5 1.5l-2.5-1L2 9l2 1.5v3L2 15l2 3.5 2.5-1A7 7 0 0 0 9 19l.5 3h4l.5-3a7 7 0 0 0 2.5-1.5l2.5 1L21 15z"/></symbol>
-    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="7"/><path d="m16 16 5 5"/></symbol>
-    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 7h16M7 12h10M10 17h4"/></symbol>
-    <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 4v16M16 4v16"/></symbol>
-    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 17v4h16v-4"/></symbol>
-    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4M4 17v4h16v-4"/></symbol>
-    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
-    <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 12h16m-7-7 7 7-7 7"/></symbol>
-    <symbol id="i-sort" viewBox="0 0 24 24"><path d="m8 4-4 4h8L8 4zm0 16 4-4H4l4 4zM16 5h5M16 10h4M16 15h3M16 20h2"/></symbol>
-    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></symbol>
-    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
-    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
-    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5z"/></symbol>
-    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z"/></symbol>
-    <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 4 3-4 3M12 16h5"/></symbol>
-    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M5.8 9A7 7 0 0 1 18 6.9L20 12M4 12l2 5a7 7 0 0 0 12.2-2"/></symbol>
-    <symbol id="i-close" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5 5 19"/></symbol>
-    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M16 3 21 8l-4 2-3 4-3 7-1-8-5-5-2-1 7-3z"/></symbol>
-    <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h1m3 0h1m3 0h1m3 0h1M6 13h1m3 0h1m3 0h1m3 0h1M8 16h8"/></symbol>
-    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 2.7 7.3L22 12l-7.3 2.7L12 22l-2.7-7.3L2 12l7.3-2.7z"/></symbol>
-    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
-  </svg>
-
-  <div class="app-shell">
-    <aside class="sidebar">
-      <a class="brand" href="./index.html" aria-label="GPUI Grid home">
-        <div class="brand-symbol"><span></span><span></span><span></span><span></span></div>
-        <span>gpui<span class="brand-soft">grid</span><span class="brand-dot">.</span></span>
-      </a>
-      <div class="sidebar-label first-label">WORKSPACE</div>
-      <nav class="side-nav" aria-label="Main navigation">
-        <button class="nav-link active" data-view="orders"><svg><use href="#i-grid"/></svg><span>Data Grid</span><span class="nav-active-dot"></span></button>
-        <button class="nav-link" data-view="performance"><svg><use href="#i-chart"/></svg><span>Performance Lab</span></button>
-        <button class="nav-link" data-view="themes"><svg><use href="#i-palette"/></svg><span>Theme Studio</span></button>
-        <button class="nav-link" data-view="docs"><svg><use href="#i-book"/></svg><span>Documentation</span></button>
-      </nav>
-      <div class="sidebar-label workspace-label">EXAMPLE DATASETS</div>
-      <nav class="side-nav secondary-nav" aria-label="Dataset presets">
-        <button class="nav-link active-soft" data-preset="commerce"><span class="dataset-icon dataset-purple">▦</span><span>Sales Orders</span><span class="side-count">12.4k</span></button>
-        <button class="nav-link" data-preset="enterprise"><span class="dataset-icon dataset-cyan">◈</span><span>Enterprise CRM</span></button>
-        <button class="nav-link" data-preset="global"><span class="dataset-icon dataset-orange">◎</span><span>Global Operations</span></button>
-      </nav>
-      <div class="sidebar-bottom">
-        <div class="sidebar-tip">
-          <div class="sidebar-tip-icon"><svg><use href="#i-terminal"/></svg></div>
-          <div class="tip-heading">Native by design</div>
-          <p>Rust data engine. GPUI rendering. Browser-interactive showcase.</p>
-          <button data-view="docs">Explore the API <svg><use href="#i-arrow-right"/></svg></button>
-        </div>
-        <div class="sidebar-profile"><div class="profile-logo">G</div><div><strong>GPUI Grid</strong><small>Open-source project</small></div><span class="version-pill">v0.1</span></div>
-      </div>
-    </aside>
-
-    <div class="workspace">
-      <header class="topbar">
-        <div class="crumb"><span>Components</span><span class="slash">/</span><strong id="breadcrumb">Data Grid</strong><span class="preview-tag">PREVIEW</span></div>
-        <div class="topbar-right"><span class="release-indicator"><span class="live-dot"></span>Interactive demo</span><span class="topbar-divider"></span><button class="icon-button" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode"><svg><use href="#i-moon"/></svg></button><button class="icon-button" data-view="docs" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><svg><use href="#i-keyboard"/></svg></button><span class="avatar-top">GG</span></div>
-      </header>
-
-      <main class="main-content">
-        <div class="page-intro">
-          <div class="intro-left"><div class="eyebrow"><span class="eyebrow-line"></span> THE COMPONENT PLAYGROUND <span class="eyebrow-bullet">•</span> QUARTZ INSPIRED</div><h1 id="page-title">Data Grid <span>Playground</span></h1><p id="page-description">A powerful, pixel-precise grid experience. Built for dense data, delightful to use.</p></div>
-          <div class="intro-actions"><button class="button button-outline" data-view="docs"><svg><use href="#i-book"/></svg> Quick start</button><button class="button button-dark" id="reset-btn"><svg><use href="#i-refresh"/></svg> Reset demo</button></div>
-        </div>
-
-        <section class="metrics" aria-label="Dataset metrics">
-          <article class="metric-card"><div class="metric-top"><span>Total records</span><span class="metric-symbol indigo"><svg><use href="#i-grid"/></svg></span></div><div class="metric-value" id="metric-rows">12,480</div><div class="metric-sub"><span class="growth-chip">↗ Virtualized</span><span>instant scrolling</span></div></article>
-          <article class="metric-card"><div class="metric-top"><span>Total revenue</span><span class="metric-symbol green"><svg><use href="#i-chart"/></svg></span></div><div class="metric-value" id="metric-revenue">$0</div><div class="metric-sub"><span class="growth-chip green-chip">↗ Aggregated</span><span>across visible rows</span></div></article>
-          <article class="metric-card"><div class="metric-top"><span>Completed orders</span><span class="metric-symbol blue"><svg><use href="#i-check"/></svg></span></div><div class="metric-value" id="metric-completed">0</div><div class="metric-sub"><span class="metric-tiny-bar"><i></i></span><span id="metric-completion">0% completion rate</span></div></article>
-          <article class="metric-card"><div class="metric-top"><span>Health score</span><span class="metric-symbol orange"><svg><use href="#i-spark"/></svg></span></div><div class="metric-value"><span id="metric-score">0</span><span class="metric-unit">/ 100</span></div><div class="metric-sub"><span class="metric-tiny-bar orange-bar"><i></i></span><span>average account health</span></div></article>
-        </section>
-
-        <section class="data-card" aria-label="Interactive data grid">
-          <div class="data-heading"><div class="data-heading-left"><div class="data-title">Order management <span class="table-badge">LIVE PREVIEW</span></div><div class="data-subtitle">Explore, edit and organize your dataset with enterprise-grade controls.</div></div><div class="data-header-right"><span class="keyboard-hint"><kbd>⌘</kbd> + <kbd>K</kbd> Search</span><button class="outline-icon-btn" id="show-columns" title="Manage columns"><svg><use href="#i-columns"/></svg> Columns</button><button class="export-btn" id="export-btn"><svg><use href="#i-download"/></svg> Export CSV</button></div></div>
-          <div class="tab-row" role="tablist" aria-label="Table view presets"><button class="table-tab selected" role="tab" aria-selected="true" data-tab="all"><svg><use href="#i-grid"/></svg> All orders <span id="tab-count">12,480</span></button><button class="table-tab" role="tab" aria-selected="false" data-tab="completed">Completed</button><button class="table-tab" role="tab" aria-selected="false" data-tab="processing">In progress</button><button class="table-tab" role="tab" aria-selected="false" data-tab="flagged">Needs attention</button><span class="tab-spacer"></span><span class="saved-view-label"><span class="live-dot"></span> All changes local to your browser</span></div>
-          <div class="grid-toolbar">
-            <label class="search-control"><svg><use href="#i-search"/></svg><input id="search-input" type="search" placeholder="Search across all columns..." autocomplete="off" aria-label="Search grid"/><span class="shortcut">⌘ K</span></label>
-            <div class="toolbar-right"><button class="tool-button" id="advanced-filters"><svg><use href="#i-filter"/></svg> Filters <span id="filter-counter" class="filter-counter" hidden>1</span></button>
-            <label class="tool-select" aria-label="Group rows"><span>Group by</span><select id="group-select"><option value="">None</option><option value="region">Region</option><option value="status">Status</option><option value="category">Category</option><option value="channel">Channel</option></select><svg><use href="#i-chevron"/></svg></label>
-            <label class="tool-select density-select" aria-label="Row density"><span>Density</span><select id="density-select"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select><svg><use href="#i-chevron"/></svg></label>
-            <button class="tool-icon" id="import-btn" title="Import CSV" aria-label="Import CSV"><svg><use href="#i-upload"/></svg></button><input type="file" id="csv-file" accept=".csv,text/csv" hidden /></div>
-          </div>
-          <div class="filter-panel" id="filter-panel" hidden><div class="filter-panel-title"><strong>Advanced filters</strong><button id="clear-filters">Clear all</button></div><div class="filter-fields"><label>Status <select id="status-filter"><option>All statuses</option><option>Completed</option><option>Processing</option><option>Pending</option><option>Cancelled</option></select></label><label>Region <select id="region-filter"><option>All regions</option><option>North America</option><option>Europe</option><option>APAC</option><option>Latin America</option><option>Middle East</option></select></label><label>Company contains <input id="company-filter" placeholder="e.g. Stripe" /></label></div></div>
-          <div class="grid-area">
-            <div id="grid-scroll" class="grid-scroll" tabindex="0" role="grid" aria-label="Order management data grid" aria-rowcount="12480">
-              <div id="grid-header" class="grid-header" role="row"></div>
-              <div id="grid-body" class="grid-body"><div id="grid-rows"></div></div>
-            </div>
-            <aside class="column-panel" id="column-panel" hidden><div class="panel-head"><div><strong>Columns</strong><span>Show, hide and pin fields</span></div><button id="close-columns" title="Close" aria-label="Close columns"><svg><use href="#i-close"/></svg></button></div><div id="column-options" class="column-options"></div><div class="panel-footer"><button id="reset-columns">Restore defaults</button></div></aside>
-            <div class="no-results" id="empty-state" hidden><div class="empty-symbol"><svg><use href="#i-search"/></svg></div><strong>No matching rows</strong><p>Try a different search or clear your filters.</p><button id="empty-clear">Clear filters</button></div>
-          </div>
-          <div class="grid-footer"><div class="status-left"><span class="status-ready"><span class="live-dot"></span> Ready</span><span class="footer-sep"></span><span id="footer-rows">0 of 12,480 rows</span><span class="footer-sep"></span><span id="footer-selected">0 selected</span><span id="footer-active" class="active-cell-label"></span></div><div class="status-right"><span>Dataset</span><select id="dataset-select" aria-label="Dataset size"><option value="1000">1,000 rows</option><option value="12480" selected>12,480 rows</option><option value="100000">100,000 rows</option></select><span class="footer-sep"></span><span id="rendered-count">0 rendered</span><span class="footer-sep"></span><span class="footer-engine">GPUI GRID <span>v0.1</span></span></div></div>
-        </section>
-        <div class="below-grid"><div class="below-left"><svg><use href="#i-keyboard"/></svg><span><strong>Pro tip:</strong> Double-click to edit · Shift-click to select a range · Drag column edges to resize · Ctrl/Cmd+C to copy</span></div><div class="below-right"><span class="feature-dot"></span> Zero dependencies <span class="dot-divider">·</span> Browser showcase for the Rust component</div></div>
-      </main>
-    </div>
-  </div>
-  <div id="floating-menu" class="floating-menu" hidden></div>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <dialog id="docs-dialog" class="docs-dialog"><div class="dialog-top"><div class="dialog-icon"><svg><use href="#i-book"/></svg></div><button id="close-docs" aria-label="Close dialog"><svg><use href="#i-close"/></svg></button></div><p class="dialog-eyebrow">GPUI GRID / DOCUMENTATION</p><h2>Built for the details.</h2><p>This website is an interactive HTML/JavaScript showcase. The reusable Rust model and native GPUI widget are in the same repository, under <code>crates/</code>.</p><div class="docs-code"><span>Native quick start</span><pre>cargo run -p gpui-grid-native</pre></div><div class="shortcuts"><div><kbd>Double click</kbd><span>Edit a cell</span></div><div><kbd>Shift + click</kbd><span>Select cell range</span></div><div><kbd>Ctrl / Cmd + C</kbd><span>Copy selection</span></div><div><kbd>Ctrl / Cmd + V</kbd><span>Paste TSV / CSV</span></div><div><kbd>Arrow keys</kbd><span>Move active cell</span></div><div><kbd>Enter</kbd><span>Edit selected cell</span></div></div><button class="button button-dark dialog-close" id="got-it">Got it <svg><use href="#i-check"/></svg></button></dialog>
-  <script type="module" src="./main.js"></script>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="identity"><span class="mark">▦</span><span>gpui<span class="accent">grid</span><span class="period">.</span></span></div>
+    <div class="caps">COMPONENT WORKSPACE</div>
+    <a class="nav active" href="./"><span class="nav-icon">▦</span>Data Grid <span class="nav-tag">LIVE</span></a>
+    <a class="nav" href="https://github.com/caovc/gpui-grid" target="_blank" rel="noopener"><span class="nav-icon">⌘</span>Source on GitHub <span class="external">↗</span></a>
+    <div class="caps lower">BACKEND</div>
+    <div class="backend"><span class="pulse"></span><div><b>Rust → WASM</b><small>GPUI WebPlatform</small></div></div>
+    <div class="sidebar-note">The component below is rendered by the same <strong>Rust GPUI view</strong> used by the desktop demo. It is not a JavaScript table clone.</div>
+    <div class="sidebar-bottom">GPUI KIT <b>0.7.3</b><span>•</span> PROOF OF CONCEPT</div>
+  </aside>
+  <main class="content">
+    <header class="topline"><div><span class="breadcrumb">Components</span><span class="chev">›</span><strong>Data Grid</strong></div><div class="topright"><span class="chip">● WASM RUNTIME</span><a href="https://github.com/caovc/gpui-grid/actions" target="_blank" rel="noopener">Build status ↗</a></div></header>
+    <section class="intro"><div><div class="eyebrow">INTERACTIVE COMPONENT SHOWCASE <span class="eyebrow-dot">◆</span> LIVE RUST CANVAS</div><h1>Data Grid<span class="h1dot">.</span></h1><p>AG Grid-inspired data table, built with Rust + GPUI. The canvas below runs the actual GPUI native component compiled to WebAssembly.</p></div><div class="intro-side"><span class="version">v0.1.0 · Experimental Web target</span></div></section>
+    <div class="metrics"><div class="metric"><span class="metric-icon">▦</span><div><strong>12,480</strong><small>Sample rows</small></div></div><div class="metric"><span class="metric-icon purple">⚡</span><div><strong>Native GPUI</strong><small>Shared Rust renderer</small></div></div><div class="metric"><span class="metric-icon cyan">◎</span><div><strong>WebGPU / WebGL2</strong><small>Browser rendering backend</small></div></div><div class="metric"><span class="metric-icon green">✓</span><div><strong>DataTable</strong><small>Virtualized rows &amp; columns</small></div></div></div>
+    <section class="viewer-card"><div class="viewer-toolbar"><div class="viewer-title"><span class="mini-grid">▦</span><strong>Live component</strong><span class="runtime" id="runtime"><i class="status-dot"></i>Initializing WASM…</span></div><div class="viewer-controls"><button id="reload" type="button">↻ &nbsp;Restart</button><a href="./viewer/" target="_blank" rel="noopener">↗ &nbsp;Fullscreen</a></div></div><div class="frame-wrap"><iframe id="gpui-frame" title="Real Rust GPUI data table (WebAssembly)" src="./viewer/" allow="fullscreen"></iframe></div><div class="viewer-footer"><span><i class="green-dot"></i> Actual Rust / GPUI WebAssembly runtime</span><span id="runtime-details">Waiting for WebGPU / WebGL2 initialization…</span></div></section>
+    <div class="footnotes"><span><b>Try it:</b> Sort a header · resize columns · select cells · filter to “Completed” · show all rows</span><span><a href="https://gpui-kit.com/docs/webassembly/" rel="noopener" target="_blank">GPUI WebAssembly docs ↗</a></span></div>
+  </main>
+</div>
+<script type="module" src="./shell.js"></script>
 </body>
 </html>

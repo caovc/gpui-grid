@@ -1,19 +1,23 @@
-import { mkdir, copyFile, readFile, writeFile, rm } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-const root=dirname(fileURLToPath(import.meta.url));
-const dest=join(root,'dist');
-await rm(dest,{recursive:true,force:true});
-await mkdir(dest,{recursive:true});
-for(const file of ['index.html','styles.css','engine.js','main.js'])await copyFile(join(root,file),join(dest,file));
-// A completely self-contained preview for opening without a server or npm.
-const html=await readFile(join(root,'index.html'),'utf8');
-const css=await readFile(join(root,'styles.css'),'utf8');
-const engine=await readFile(join(root,'engine.js'),'utf8');
-const main=await readFile(join(root,'main.js'),'utf8');
-const bundle=engine.replace(/^export\s+/gm,'')+'\nconst esc = escapeHtml;\n'+main.replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"]\.\/engine\.js['"];?\s*/m,'');
-const standalone=html
-  .replace('<link rel="stylesheet" href="./styles.css" />',()=>`<style>\n${css}\n</style>`)
-  .replace('<script type="module" src="./main.js"></script>',()=>`<script type="module">\n${bundle}\n</script>`);
-await writeFile(join(dest,'standalone.html'),standalone);
-console.log(`Built ${dest} (4 Pages assets and a standalone one-file preview)`);
+import {mkdir, copyFile, readFile, stat, rm} from 'node:fs/promises';
+import {dirname, join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root = dirname(fileURLToPath(import.meta.url));
+const dist = join(root,'dist');
+const pkg = join(root,'pkg');
+const js = join(pkg,'gpui_grid_web.js');
+const wasm = join(pkg,'gpui_grid_web_bg.wasm');
+try {
+  const magic = (await readFile(wasm)).subarray(0,4);
+  if (magic.toString('hex') !== '0061736d') throw Error('Invalid WebAssembly binary magic');
+  if ((await stat(wasm)).size < 1024 || !(await readFile(js,'utf8')).includes('export')) throw Error('WASM bindings appear incomplete');
+} catch (error) {
+  console.error('No valid GPUI WASM bundle found. Run ./scripts/build-wasm.sh --release first.');
+  throw error;
+}
+await rm(dist,{force:true,recursive:true});
+await mkdir(join(dist,'viewer','pkg'),{recursive:true});
+for (const file of ['index.html','styles.css','shell.js']) await copyFile(join(root,file),join(dist,file));
+for (const file of ['index.html','loader.js']) await copyFile(join(root,'viewer',file),join(dist,'viewer',file));
+await copyFile(js,join(dist,'viewer','pkg','gpui_grid_web.js'));
+await copyFile(wasm,join(dist,'viewer','pkg','gpui_grid_web_bg.wasm'));
+console.log(`Built actual Rust/GPUI WebAssembly site: ${dist}`);

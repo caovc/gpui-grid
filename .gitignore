@@ -8,3 +8,7 @@
 .idea/
 .vscode/
 *.swp
+
+# WASM generated bindings; dynamically fetched build-time fonts
+/web/pkg/
+/crates/gpui-grid-web/fonts/

@@ -1,14 +1,16 @@
-name: Deploy Component Preview · GitHub Pages
+name: Deploy Real GPUI WASM Preview · GitHub Pages
 
 on:
   push:
     branches: [main]
     paths:
       - 'web/**'
+      - 'scripts/build-wasm.sh'
+      - 'crates/**'
+      - 'Cargo.toml'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
-# Per GitHub's Pages workflow template; OIDC is used only for deployment.
 permissions:
   contents: read
   pages: write
@@ -20,25 +22,65 @@ concurrency:
 
 jobs:
   build-preview:
-    name: Test and build preview
+    name: Build genuine Rust / GPUI WASM for Pages
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      pages_enabled: ${{ steps.check-pages.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: gpui-web-wasm32
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.121
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Run browser engine tests
-        run: npm --prefix web test
-      - name: Build standalone site
-        run: npm --prefix web run build
+      - run: npm --prefix web test
+      - run: ./scripts/build-wasm.sh --release
+      - run: npm --prefix web run build
+      - name: Check Pages is enabled (never pretend an unconfigured site was deployed)
+        id: check-pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          code=$(curl --silent --show-error --output /tmp/pages-check.json --write-out '%{http_code}' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pages")
+          if [[ "$code" == "200" ]]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          elif [[ "$code" == "404" ]]; then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo '::warning::Pages is disabled. In Settings > Pages, set Source to GitHub Actions, then rerun this workflow.'
+          else
+            echo "GitHub Pages API returned $code" >&2
+            cat /tmp/pages-check.json >&2
+            exit 1
+          fi
       - uses: actions/configure-pages@v5
+        if: steps.check-pages.outputs.ready == 'true'
       - uses: actions/upload-pages-artifact@v4
+        if: steps.check-pages.outputs.ready == 'true'
         with:
           path: web/dist
+      - uses: actions/upload-artifact@v4
+        if: steps.check-pages.outputs.ready != 'true'
+        with:
+          name: gpui-wasm-build-awaiting-pages-setup
+          path: web/dist
+          retention-days: 7
 
   deploy:
-    name: Publish to Pages
+    name: Publish browser-rendered GPUI WASM
     needs: build-preview
+    if: needs.build-preview.outputs.pages_enabled == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -48,6 +90,6 @@ jobs:
       pages: write
       id-token: write
     steps:
-      - name: Deploy GitHub Pages artifact
+      - name: Deploy Rust GPUI WASM preview
         id: deployment
         uses: actions/deploy-pages@v4

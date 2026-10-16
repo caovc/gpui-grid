@@ -17,9 +17,9 @@ done
 PROFILE=debug
 if [[ "${1:-}" == "--release" ]]; then
   PROFILE=release
-  cargo rustc -p gpui-grid-web --target wasm32-unknown-unknown --release -- -C link-arg=-zstack-size=8388608
+  RUSTC_BOOTSTRAP=1 cargo rustc -p gpui-grid-web --target wasm32-unknown-unknown --release -- -C link-arg=-zstack-size=8388608
 else
-  cargo rustc -p gpui-grid-web --target wasm32-unknown-unknown -- -C link-arg=-zstack-size=8388608
+  RUSTC_BOOTSTRAP=1 cargo rustc -p gpui-grid-web --target wasm32-unknown-unknown -- -C link-arg=-zstack-size=8388608
 fi
 WASM="$ROOT/target/wasm32-unknown-unknown/$PROFILE/gpui_grid_web.wasm"
 test -s "$WASM"

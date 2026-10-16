@@ -33,6 +33,8 @@ npm --prefix web run dev
 # Visit http://127.0.0.1:4173/
 ```
 
+The upstream `wasm_thread` 0.3.3 dependency currently requires an unstable Rust intrinsic. Like the GPUI Kit upstream WASM checks, the script scopes `RUSTC_BOOTSTRAP=1` to the **WASM cargo rustc command only**. This is a temporary compiler compatibility workaround, not a promise of stable Rust support.
+
 `gpui-grid-web` is a real `cdylib` crate. It builds the same `GridShowcase` Rust `Render` tree that the native desktop executable starts. The JS host only loads `gpui_grid_web.js`, initializes `gpui_grid_web_bg.wasm`, and calls Rust's exported `run()`; GPUI WebPlatform paints the actual UI into a canvas via WebGPU/WebGL2. Build **fails** if the WASM artifact is missing, rather than silently serving a mock.
 
 **Features actually wired to this shared GPUI view:** virtual scrolling via GPUI Kit DataTable, column drag/resize, native GPUI sorting/selection, and quick filtering using “Completed only” / “All rows”. `gpui-grid-core` also supports richer filtering, editing, grouping and CSV exports, but some of these features still lack native/WASM UI and should not be claimed to work in the browser. See [feature matrix](docs/FEATURES.md).

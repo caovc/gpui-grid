@@ -1,6 +1,7 @@
 //! Reusable GPUI view for native desktop and WASM web previews.
 use crate::{GridDelegate, sample_orders};
 use gpui_kit::*;
+use gpui_kit::base::StyledExt;
 use gpui_kit::component::table::{DataTable, TableState};
 use gpui_kit::component::button::Button;
 

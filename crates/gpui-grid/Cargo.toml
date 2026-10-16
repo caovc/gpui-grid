@@ -1,0 +1,14 @@
+[package]
+name = "gpui-grid"
+description = "Native GPUI Grid component powered by gpui-kit DataTable and an independent Rust query engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+gpui-grid-core = { path = "../gpui-grid-core" }
+gpui-kit = "=0.7.3"
+
+[lints]
+workspace = true

@@ -1,0 +1,10 @@
+# Rust
+/target/
+**/*.rs.bk
+# Browser generated assets
+/web/dist/
+# Editor / system
+.DS_Store
+.idea/
+.vscode/
+*.swp

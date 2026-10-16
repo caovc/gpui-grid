@@ -1,0 +1,49 @@
+name: CI · Rust and Browser
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-core:
+    name: Rust core · tests + check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run UI-neutral data engine tests
+        run: cargo test -p gpui-grid-core --all-targets
+      - name: Validate core compilation
+        run: cargo check -p gpui-grid-core
+
+  browser-preview:
+    name: Browser preview · unit tests + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test viewport, filters, sorting, grouping and CSV
+        run: npm --prefix web test
+      - name: Build static preview
+        run: npm --prefix web run build
+      - name: Validate output
+        run: test -s web/dist/index.html && test -s web/dist/main.js && test -s web/dist/standalone.html
+
+  native-gpui:
+    name: GPUI component + desktop app · macOS
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Compile native GPUI library and demo
+        run: cargo check -p gpui-grid -p gpui-grid-native

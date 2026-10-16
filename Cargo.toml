@@ -1,0 +1,14 @@
+[workspace]
+members = ["crates/gpui-grid-core", "crates/gpui-grid", "examples/native"]
+default-members = ["crates/gpui-grid-core"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/caovc/gpui-grid"
+rust-version = "1.89"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

@@ -1,0 +1,14 @@
+[package]
+name = "gpui-grid-native"
+description = "Runnable desktop showcase for the GPUI Grid Rust component"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+gpui-grid = { path = "../../crates/gpui-grid" }
+gpui-kit = "=0.7.3"
+
+[lints]
+workspace = true

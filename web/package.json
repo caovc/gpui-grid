@@ -1,0 +1,8 @@
+{
+  "name": "gpui-grid-preview",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AG Grid-inspired standalone, dependency-free preview for GPUI Grid",
+  "scripts": { "dev": "node dev.mjs", "test": "node --test *.test.mjs", "build": "node build.mjs" }
+}

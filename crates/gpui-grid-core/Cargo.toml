@@ -1,0 +1,10 @@
+[package]
+name = "gpui-grid-core"
+description = "UI-independent grid query engine with stable sorting, filters, editing and grouping"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true

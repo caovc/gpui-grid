@@ -25,12 +25,12 @@
 
 | 阶段 | 推荐顺序 | 交付验收点 | 粗略工作量* |
 |---|---|---|---|
-| **M0 / v0.2 foundation** | [#2](../issues/2) 真 WASM 浏览器 Smoke → [#3](../issues/3) GridState / GridOptions / Events | GPU 画面与最小交互可证、稳定 Row/Column ID、可扩展 API | 1–3 周 |
-| **M1 / v0.2 interaction** | [#4](../issues/4) 编辑器、[#5](../issues/5) 区域选择 → [#6](../issues/6) Clipboard/Undo | 输入/校验/撤销/复制粘贴在 Rust 桌面与 WASM 同功能 | 3–6 周 |
-| **M2 / v0.3 data & UX** | [#7](../issues/7) 类型筛选 ∥ [#8](../issues/8) 多列排序 ∥ [#9](../issues/9) 列管理/Quartz 主题 | 表头控件全部对应真实 Rust GridState | 3–5 周 |
-| **M3 / v0.4 advanced & perf** | [#10](../issues/10) 分组聚合 → [#11](../issues/11) 10 万行/200 列基准及优化 | 高级行模型无数据错误，附跨端可复现性能数据 | 3–6 周 |
-| **M4 / v0.5 extensibility** | [#12](../issues/12) Async/ServerSide RowModel、[#13](../issues/13) CSV/XLSX、[#14](../issues/14) crate API / docs、[#15](../issues/15) IME/Accessibility | 远程数据、导入导出、跨端发布与 API 文档 | 4–8 周 |
-| **Future** | [#16](../issues/16) Pivot / Tree / Merge / Fill Handle RFC | RFC + 原型，择优启动，不纳入首版完成标准 | 待评估 |
+| **M0 / v0.2 foundation** | [#2](https://github.com/caovc/gpui-grid/issues/2) 真 WASM 浏览器 Smoke → [#3](https://github.com/caovc/gpui-grid/issues/3) GridState / GridOptions / Events | GPU 画面与最小交互可证、稳定 Row/Column ID、可扩展 API | 1–3 周 |
+| **M1 / v0.2 interaction** | [#4](https://github.com/caovc/gpui-grid/issues/4) 编辑器、[#5](https://github.com/caovc/gpui-grid/issues/5) 区域选择 → [#6](https://github.com/caovc/gpui-grid/issues/6) Clipboard/Undo | 输入/校验/撤销/复制粘贴在 Rust 桌面与 WASM 同功能 | 3–6 周 |
+| **M2 / v0.3 data & UX** | [#7](https://github.com/caovc/gpui-grid/issues/7) 类型筛选 ∥ [#8](https://github.com/caovc/gpui-grid/issues/8) 多列排序 ∥ [#9](https://github.com/caovc/gpui-grid/issues/9) 列管理/Quartz 主题 | 表头控件全部对应真实 Rust GridState | 3–5 周 |
+| **M3 / v0.4 advanced & perf** | [#10](https://github.com/caovc/gpui-grid/issues/10) 分组聚合 → [#11](https://github.com/caovc/gpui-grid/issues/11) 10 万行/200 列基准及优化 | 高级行模型无数据错误，附跨端可复现性能数据 | 3–6 周 |
+| **M4 / v0.5 extensibility** | [#12](https://github.com/caovc/gpui-grid/issues/12) Async/ServerSide RowModel、[#13](https://github.com/caovc/gpui-grid/issues/13) CSV/XLSX、[#14](https://github.com/caovc/gpui-grid/issues/14) crate API / docs、[#15](https://github.com/caovc/gpui-grid/issues/15) IME/Accessibility | 远程数据、导入导出、跨端发布与 API 文档 | 4–8 周 |
+| **Future** | [#16](https://github.com/caovc/gpui-grid/issues/16) Pivot / Tree / Merge / Fill Handle RFC | RFC + 原型，择优启动，不纳入首版完成标准 | 待评估 |
 
 `*` 时间仅为**熟悉 Rust + GPUI 的开发者**的粗略工程估计，含测试与返工空间；GPUI 实验性 WebAssembly 后端、输入法与浏览器 GPU 可显著改变周期。不是固定截止日或自动运行计划。可并行项目用 `∥` 标记。
 

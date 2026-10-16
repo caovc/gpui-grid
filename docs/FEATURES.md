@@ -5,6 +5,8 @@ One view is used for **desktop native GPUI and the browser's GPUI WebPlatform**.
 | Feature | Rust core | GPUI native view | Browser WASM (same view) |
 |---|---|---|---|
 | Typed row and column model | ✅ | ✅ | ✅ |
+| GridState / GridOptions / GridApi + typed change events | ✅ | foundation API | foundation API |
+| Stable focus row ID and presentation column state | ✅ | model integrated, UI TODO | model integrated, UI TODO |
 | 12,480 sample rows with virtualized DataTable | ✅ | ✅ | ✅ (browser GPU dependent) |
 | Column resize, move, pinned first column | n/a | ✅ GPUI Kit | ✅ GPUI Kit |
 | Sort by column | ✅ | ✅ | ✅ |

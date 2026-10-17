@@ -78,6 +78,9 @@ pub(crate) struct HeaderSpec {
     pub filter_active: bool,
     /// One-based sort priority and direction.
     pub sort: Option<(usize, bool)>,
+    pub pinned_left: bool,
+    pub can_move_left: bool,
+    pub can_move_right: bool,
     pub input: Entity<InputState>,
     pub input_focus: Option<FocusHandle>,
     pub set_values: Option<Vec<DistinctValue>>,
@@ -253,6 +256,78 @@ fn show_columns_button(key: &str, table: &Entity<TableState<GridDelegate>>) -> B
 }
 
 
+
+fn move_column_button(
+    key: &str,
+    table: &Entity<TableState<GridDelegate>>,
+    direction: isize,
+    enabled: bool,
+) -> Button {
+    let key = key.to_owned();
+    let target = table.clone();
+    let slug = if direction < 0 { "left" } else { "right" };
+    Button::new(format!("grid-move-column-{}-{}", slug, key))
+        .label(if direction < 0 { "← Move" } else { "Move →" })
+        .outline().xsmall()
+        .disabled(!enabled)
+        .on_click(move |_, _, cx: &mut App| {
+            let result = target.update(cx, |state, cx| {
+                let result = state.delegate_mut().move_column_step(&key, direction);
+                if result.is_ok() { state.refresh(cx); }
+                result.map(|_| state.delegate().model.state
+                    .visible_column_keys().collect::<Vec<_>>().join(","))
+            });
+            if let Ok(order) = result {
+                record_action(format!("column-move:{}:{}:{}", key, slug, order));
+            }
+            cx.stop_propagation();
+        })
+}
+
+fn pin_column_button(
+    key: &str,
+    table: &Entity<TableState<GridDelegate>>,
+    pinned_left: bool,
+) -> Button {
+    let key = key.to_owned();
+    let target = table.clone();
+    Button::new(format!("grid-toggle-pin-{}", key))
+        .label(if pinned_left { "Unpin" } else { "Pin left" })
+        .outline().xsmall()
+        .on_click(move |_, _, cx: &mut App| {
+            let result = target.update(cx, |state, cx| {
+                let result = state.delegate_mut().set_column_pin_left(&key, !pinned_left);
+                if result.is_ok() { state.refresh(cx); }
+                result.map(|_| state.delegate().model.state
+                    .visible_column_keys().collect::<Vec<_>>().join(","))
+            });
+            if let Ok(order) = result {
+                record_action(format!(
+                    "column-pin:{}:{}:{}", key,
+                    if pinned_left { "none" } else { "left" }, order
+                ));
+            }
+            cx.stop_propagation();
+        })
+}
+
+fn reset_columns_button(table: &Entity<TableState<GridDelegate>>) -> Button {
+    let target = table.clone();
+    Button::new("grid-reset-column-state")
+        .label("Reset")
+        .outline().xsmall()
+        .on_click(move |_, _, cx: &mut App| {
+            let order = target.update(cx, |state, cx| {
+                state.delegate_mut().reset_columns();
+                state.refresh(cx);
+                state.delegate().model.state.visible_column_keys()
+                    .collect::<Vec<_>>().join(",")
+            });
+            record_action(format!("columns-reset:{}", order));
+            cx.stop_propagation();
+        })
+}
+
 fn matching_set_values(values: &[DistinctValue], query: &str) -> Vec<Value> {
     let query = query.trim().to_lowercase();
     values.iter().filter(|option|
@@ -365,7 +440,12 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
                     .child(sort_button(&spec.key, &spec.table, SortCommand::AppendDesc)))
                 .child(div().flex().gap_1()
                     .child(hide_column_button(&spec.key, &spec.table))
-                    .child(show_columns_button(&spec.key, &spec.table)))
+                    .child(show_columns_button(&spec.key, &spec.table))
+                    .child(reset_columns_button(&spec.table)))
+                .child(div().flex().gap_1()
+                    .child(move_column_button(&spec.key, &spec.table, -1, spec.can_move_left))
+                    .child(move_column_button(&spec.key, &spec.table, 1, spec.can_move_right))
+                    .child(pin_column_button(&spec.key, &spec.table, spec.pinned_left)))
                 .child(div().border_t_1().border_color(rgb(0xe3e8ef)).pt_1()
                     .font_bold().text_color(rgb(0x344b63))
                     .child("Filter this column"));

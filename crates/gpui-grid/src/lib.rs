@@ -8,13 +8,25 @@
 //! This is the first native component milestone. The browser showcase additionally
 //! demonstrates controls that are not yet available in this native adapter.
 use gpui_grid_core::{GridError, GridModel, Sort, Value};
-use std::{cell::RefCell, rc::Rc};
-use gpui_kit::component::input::{Input, InputState};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::*;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::component::table::{
     Column as UiColumn, ColumnSort, TableDelegate, TableState,
 };
+mod header_controls;
+use header_controls::{HeaderErrors, HeaderSpec, column_header};
+/// Browser-only, read-only verification of actual GPUI header-menu operations.
+#[cfg(target_family = "wasm")]
+pub mod header_debug {
+    pub fn preview_last_header_action() -> String {
+        super::header_controls::preview_last_header_action()
+    }
+    pub fn preview_open_header_menu() -> String {
+        super::header_controls::preview_open_header_menu()
+    }
+}
 
 pub use gpui_grid_core::{
     CellAddress, Column as GridColumn, ColumnState, DataType, Edit, Filter, FilterOp, parse_cell_value,
@@ -48,6 +60,10 @@ pub struct GridDelegate {
     visible: Vec<usize>,
     selection_rect: Option<SelectionRect>,
     inline_editor: InlineEditorSlot,
+    /// Input entities persist across header re-renders and sort/filter operations.
+    header_inputs: HashMap<String, Entity<InputState>>,
+    header_subscriptions: Vec<Subscription>,
+    header_errors: HeaderErrors,
 }
 
 impl GridDelegate {
@@ -63,7 +79,21 @@ impl GridDelegate {
     }
 
     pub fn set_column_visibility(&mut self, key: &str, visible: bool) -> Result<(), GridError> {
+        if !visible && self.presentation.len() <= 1 && self.presentation.iter().any(|col| col.key.as_ref() == key) {
+            return Err(GridError::InvalidValue("Cannot hide the final visible column".into()));
+        }
         self.model.set_column_visible(key, visible)?;
+        self.presentation = Self::presentation_for(&self.model);
+        self.refresh_selection_rect();
+        Ok(())
+    }
+
+    /// Restore every schema column, preserving the existing presentation order.
+    pub fn show_all_columns(&mut self) -> Result<(), GridError> {
+        let keys: Vec<String> = self.model.state.columns.iter().map(|col| col.key.clone()).collect();
+        for key in keys {
+            self.model.set_column_visible(&key, true)?;
+        }
         self.presentation = Self::presentation_for(&self.model);
         self.refresh_selection_rect();
         Ok(())
@@ -77,6 +107,9 @@ impl GridDelegate {
         let mut grid = Self {
             model, presentation, visible, selection_rect: None,
             inline_editor: Rc::new(RefCell::new(None)),
+            header_inputs: HashMap::new(),
+            header_subscriptions: Vec::new(),
+            header_errors: Rc::new(RefCell::new(HashMap::new())),
         };
         grid.refresh_selection_rect();
         grid
@@ -184,6 +217,40 @@ impl GridDelegate {
         Ok(())
     }
 
+    /// Apply one column-local filter from a real GPUI header input. Empty
+    /// input clears this column only. Invalid typed values leave every filter
+    /// and the current row view unchanged.
+    pub fn apply_column_filter(
+        &mut self,
+        key: &str,
+        op: FilterOp,
+        raw: &str,
+    ) -> Result<(), GridError> {
+        let ix = self.model.column_index(key)
+            .ok_or_else(|| GridError::UnknownColumn(key.to_string()))?;
+        let data_type = self.model.columns[ix].data_type;
+        if raw.trim().is_empty() {
+            return self.clear_column_filter(key);
+        }
+        let value = if data_type == DataType::Text {
+            Value::Text(raw.to_string())
+        } else {
+            parse_cell_value(data_type, raw)
+                .map_err(|error| GridError::InvalidValue(error.into()))?
+        };
+        self.model.upsert_column_filter(Filter {
+            column: key.to_string(), op, value,
+        })?;
+        self.rebuild_view();
+        Ok(())
+    }
+
+    pub fn clear_column_filter(&mut self, key: &str) -> Result<(), GridError> {
+        self.model.clear_column_filter(key)?;
+        self.rebuild_view();
+        Ok(())
+    }
+
     /// Export exactly the current filtered/sorted rows and current column order.
     /// Formula-like user text is escaped by the core CSV encoder.
     pub fn export_visible_csv(&self) -> Result<String, GridError> {
@@ -201,8 +268,36 @@ impl GridDelegate {
 
     pub fn set_sort(&mut self, sorts: Vec<Sort>) -> Result<(), GridError> {
         self.model.set_sorts(sorts)?;
+        // GPUI Kit's own header sort arrows and our additional priority badge
+        // both follow the authoritative Core state, including multi-sort.
+        for col in &mut self.presentation {
+            let direction = self.model.state.sorts.iter()
+                .find(|sort| sort.column == col.key.as_ref());
+            col.sort = Some(match direction {
+                Some(sort) if sort.descending => ColumnSort::Descending,
+                Some(_) => ColumnSort::Ascending,
+                None => ColumnSort::Default,
+            });
+        }
         self.rebuild_view();
         Ok(())
+    }
+
+    /// Header menu supports single sort and explicit multi-sort. Normal
+    /// click-to-sort in GPUI Kit remains single-column by design.
+    pub fn sort_from_header_menu(
+        &mut self, key: &str, descending: bool, append: bool,
+    ) -> Result<(), GridError> {
+        let mut next = if append { self.model.state.sorts.clone() } else { Vec::new() };
+        next.retain(|sort| sort.column != key);
+        next.push(if descending { Sort::descending(key) } else { Sort::ascending(key) });
+        self.set_sort(next)
+    }
+
+    pub fn clear_column_sort(&mut self, key: &str) -> Result<(), GridError> {
+        let remaining = self.model.state.sorts.iter()
+            .filter(|sort| sort.column != key).cloned().collect();
+        self.set_sort(remaining)
     }
 
     pub fn edit(&mut self, edits: &[gpui_grid_core::Edit]) -> Result<usize, GridError> {
@@ -226,6 +321,67 @@ impl TableDelegate for GridDelegate {
     fn columns_count(&self, _cx: &App) -> usize { self.presentation.len() }
     fn rows_count(&self, _cx: &App) -> usize { self.visible.len() }
     fn column(&self, ix: usize, _cx: &App) -> UiColumn { self.presentation[ix].clone() }
+
+    fn render_th(
+        &mut self, col_ix: usize,
+        window: &mut Window, cx: &mut Context<'_, TableState<Self>>,
+    ) -> impl IntoElement {
+        let presentation = self.presentation[col_ix].clone();
+        let key = presentation.key.to_string();
+        let data_type = self.model.columns[
+            self.model.column_index(&key).expect("displayed column key is in the schema")
+        ].data_type;
+        let active = self.model.state.filters.iter().any(|filter| filter.column == key);
+        let sort = self.model.state.sorts.iter().enumerate()
+            .find(|(_, sort)| sort.column == key)
+            .map(|(priority, sort)| (priority + 1, sort.descending));
+        // Construct lazily once per stable key. Never allocate an InputState
+        // inside the Popover content closure during every repaint.
+        let input = if let Some(input) = self.header_inputs.get(&key) {
+            input.clone()
+        } else {
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder("Type filter value..."));
+            let column_key = key.clone();
+            let errors = self.header_errors.clone();
+            // Enter on the focused native GPUI filter InputState applies a
+            // sensible default operator. The Popover also exposes explicit
+            // Contains/Equals and numeric comparison buttons.
+            let sub = cx.subscribe_in(&input, window,
+                move |table, input, event: &InputEvent, _, cx| {
+                    if !matches!(event, InputEvent::PressEnter { .. }) {
+                        return;
+                    }
+                    let raw = input.read(cx).value().to_string();
+                    let op = if data_type == DataType::Text {
+                        FilterOp::Contains
+                    } else {
+                        FilterOp::Equals
+                    };
+                    let result = table.delegate_mut().apply_column_filter(&column_key, op, &raw);
+                    if result.is_ok() {
+                        errors.borrow_mut().remove(&column_key);
+                    } else if let Err(error) = &result {
+                        errors.borrow_mut().insert(column_key.clone(), error.to_string());
+                    }
+                    let visible = table.delegate().row_count();
+                    header_controls::record_enter_filter(&column_key, result.is_ok(), visible);
+                    table.refresh(cx);
+                },
+            );
+            self.header_subscriptions.push(sub);
+            self.header_inputs.insert(key.clone(), input.clone());
+            input
+        };
+        let input_focus = if data_type != DataType::Boolean {
+            Some(input.focus_handle(cx))
+        } else { None };
+        column_header(HeaderSpec {
+            key,
+            name: presentation.name,
+            data_type, filter_active: active, sort,
+            input, input_focus, table: cx.entity(), errors: self.header_errors.clone(),
+        })
+    }
 
     fn render_td(
         &mut self, row_ix: usize, col_ix: usize,

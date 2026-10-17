@@ -167,6 +167,48 @@ impl GridModel {
         }
         Ok(())
     }
+    /// Insert or replace a column's filter while preserving all other columns'
+    /// filter conditions. Delegates should call this for a header filter menu,
+    /// not `set_filters(vec![...])` which would wipe unrelated filters.
+    pub fn upsert_column_filter(&mut self, filter: Filter) -> Result<(), GridError> {
+        let Some(ix) = self.column_index(&filter.column) else {
+            return Err(GridError::UnknownColumn(filter.column));
+        };
+        let schema = self.columns[ix].data_type;
+        let valid = match (&filter.op, &filter.value, schema) {
+            (FilterOp::Contains, Value::Text(_), DataType::Text) => true,
+            (FilterOp::Equals, Value::Text(_), DataType::Text) => true,
+            (FilterOp::Equals, Value::Number(n), DataType::Number) => n.is_finite(),
+            (FilterOp::Equals, Value::Boolean(_), DataType::Boolean) => true,
+            (FilterOp::Equals, Value::Empty, _) => true,
+            (FilterOp::GreaterThan | FilterOp::LessThan, Value::Number(n), DataType::Number) => n.is_finite(),
+            _ => false,
+        };
+        if !valid {
+            return Err(GridError::InvalidValue(format!(
+                "incompatible filter value/operator for column {}",
+                filter.column
+            )));
+        }
+        let mut next: Vec<Filter> = self.state.filters.iter()
+            .filter(|candidate| candidate.column != filter.column)
+            .cloned().collect();
+        next.push(filter);
+        self.set_filters(next)
+    }
+
+    /// Clear only one column's condition. Unknown columns fail rather than
+    /// silently producing a success notification.
+    pub fn clear_column_filter(&mut self, key: &str) -> Result<(), GridError> {
+        if self.column_index(key).is_none() {
+            return Err(GridError::UnknownColumn(key.to_string()));
+        }
+        let remaining: Vec<Filter> = self.state.filters.iter()
+            .filter(|filter| filter.column != key)
+            .cloned().collect();
+        self.set_filters(remaining)
+    }
+
     pub fn set_sorts(&mut self, sorts: Vec<Sort>) -> Result<(), GridError> {
         for s in &sorts { if self.column_index(&s.column).is_none() {return Err(GridError::UnknownColumn(s.column.clone()));} }
         if self.state.sorts != sorts {
@@ -364,6 +406,53 @@ mod tests {
             Row::new(3,vec!["Ada".into(),10.0.into(),"3".into()]),
         ]).unwrap()
     }
+    #[test]
+    fn header_filter_replaces_only_target_column_and_is_atomic() {
+        let mut m = model();
+        m.upsert_column_filter(Filter {
+            column: "name".into(), op: FilterOp::Contains, value: Value::Text("a".into())
+        }).unwrap();
+        m.upsert_column_filter(Filter {
+            column: "sum".into(), op: FilterOp::GreaterThan, value: Value::Number(15.0)
+        }).unwrap();
+        assert_eq!(m.view(), vec![1]);
+        let before = m.state.filters.clone();
+        m.drain_events();
+        assert!(matches!(m.upsert_column_filter(Filter {
+            column: "sum".into(), op: FilterOp::GreaterThan, value: Value::Text("bad".into())
+        }), Err(GridError::InvalidValue(_))));
+        assert_eq!(m.state.filters, before);
+        assert!(m.drain_events().is_empty());
+        m.upsert_column_filter(Filter {
+            column: "sum".into(), op: FilterOp::LessThan, value: Value::Number(25.0)
+        }).unwrap();
+        assert_eq!(m.state.filters.len(), 2, "replace, do not append duplicate constraints");
+        assert_eq!(m.view(), vec![1, 2]);
+        m.clear_column_filter("sum").unwrap();
+        assert_eq!(m.state.filters.len(), 1);
+        assert_eq!(m.view(), vec![1, 2]);
+        assert!(matches!(m.clear_column_filter("unknown"), Err(GridError::UnknownColumn(_))));
+    }
+
+    #[test]
+    fn header_filters_validate_schema_and_keep_other_columns_intact() {
+        let mut m = model();
+        let expected = Filter { column: "name".into(), op: FilterOp::Equals, value: Value::Text("Ada".into()) };
+        m.upsert_column_filter(expected.clone()).unwrap();
+        for bad in [
+            Filter { column: "name".into(), op: FilterOp::GreaterThan, value: Value::Number(3.0) },
+            Filter { column: "sum".into(), op: FilterOp::Contains, value: Value::Text("3".into()) },
+            Filter { column: "sum".into(), op: FilterOp::Equals, value: Value::Number(f64::NAN) },
+        ] {
+            assert!(matches!(m.upsert_column_filter(bad), Err(GridError::InvalidValue(_))));
+            assert_eq!(m.state.filters, vec![expected.clone()]);
+        }
+        m.upsert_column_filter(Filter {
+            column: "sum".into(), op: FilterOp::GreaterThan, value: Value::Number(15.0)
+        }).unwrap();
+        assert_eq!(m.view(), vec![1]);
+    }
+
     #[test] fn base_view(){let m=model();assert_eq!(m.view(),vec![0,1,2]);assert_eq!(m.value(0,"name"),Some(&Value::from("Zoe")));}
     #[test] fn stable_sort_and_multi_sort(){let mut m=model();m.set_sorts(vec![Sort::ascending("name"),Sort::descending("sum")]).unwrap();assert_eq!(m.view(),vec![1,2,0]);}
     #[test] fn quick_filter_case_insensitive(){let mut m=model();m.set_quick_filter("zoE");assert_eq!(m.view(),vec![0]);}

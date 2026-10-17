@@ -43,6 +43,18 @@ mod wasm {
         gpui_grid::showcase::preview_visible_columns()
     }
 
+    /// Read-only probes for in-grid GPUI column menu actions, populated from
+    /// actual GPUI pointer/input events, never JavaScript row mutation.
+    #[wasm_bindgen]
+    pub fn preview_open_header_menu() -> String {
+        gpui_grid::header_debug::preview_open_header_menu()
+    }
+
+    #[wasm_bindgen]
+    pub fn preview_last_header_action() -> String {
+        gpui_grid::header_debug::preview_last_header_action()
+    }
+
     /// Read-only editor activity probe for the genuine GPUI Canvas E2E test.
     #[wasm_bindgen]
     pub fn preview_active_editor_row_id() -> u32 {

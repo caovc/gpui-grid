@@ -30,7 +30,7 @@ pub mod header_debug {
 
 pub use gpui_grid_core::{
     CellAddress, Column as GridColumn, ColumnState, DataType, Edit, Filter, FilterOp, parse_cell_value,
-    CellRange, SelectionRect, GridApi, GridEvent, GridOptions, GridState, PinSide, Row, sample_orders,
+    CellRange, SelectionRect, DistinctValue, GridApi, GridEvent, GridOptions, GridState, PinSide, Row, sample_orders,
 };
 
 /// Identifies a cell independently of sort order, filters or virtualization.
@@ -62,6 +62,9 @@ pub struct GridDelegate {
     inline_editor: InlineEditorSlot,
     /// Input entities persist across header re-renders and sort/filter operations.
     header_inputs: HashMap<String, Entity<InputState>>,
+    /// Bounded cached distinct choices: never scan 50k rows during render_th.
+    header_set_values: HashMap<String, Vec<DistinctValue>>,
+    header_set_search: HashMap<String, Entity<InputState>>,
     header_subscriptions: Vec<Subscription>,
     header_errors: HeaderErrors,
 }
@@ -99,15 +102,25 @@ impl GridDelegate {
         Ok(())
     }
 
+    fn build_header_set_values(model: &GridModel) -> HashMap<String, Vec<DistinctValue>> {
+        model.columns.iter().filter_map(|column| {
+            let values = model.distinct_column_values(&column.key, 12).ok().flatten()?;
+            (values.len() >= 2).then(|| (column.key.clone(), values))
+        }).collect()
+    }
+
     pub fn new(model: GridModel) -> Self {
         // GPUI elements are a transient cache; GridModel.state owns the order,
         // width, pin and visibility independently of the virtual viewport.
         let presentation = Self::presentation_for(&model);
+        let header_set_values = Self::build_header_set_values(&model);
         let visible = model.view();
         let mut grid = Self {
             model, presentation, visible, selection_rect: None,
             inline_editor: Rc::new(RefCell::new(None)),
             header_inputs: HashMap::new(),
+            header_set_values,
+            header_set_search: HashMap::new(),
             header_subscriptions: Vec::new(),
             header_errors: Rc::new(RefCell::new(HashMap::new())),
         };
@@ -251,6 +264,43 @@ impl GridDelegate {
         Ok(())
     }
 
+    pub fn set_column_values(&mut self, key: &str, values: Vec<Value>) -> Result<(), GridError> {
+        self.model.set_column_values(key, values)?;
+        self.rebuild_view();
+        Ok(())
+    }
+
+    pub fn toggle_column_value(&mut self, key: &str, value: Value) -> Result<(), GridError> {
+        self.model.toggle_column_value(key, value)?;
+        self.rebuild_view();
+        Ok(())
+    }
+
+    /// Batch-check or uncheck the candidates shown by a Set Filter mini search
+    /// without wiping selected options currently hidden by the search query.
+    pub fn set_matching_values(
+        &mut self, key: &str, matching: &[Value], checked: bool,
+    ) -> Result<(), GridError> {
+        let options = self.header_set_values.get(key).ok_or_else(|| GridError::InvalidValue(
+            format!("Set Filter not available for high-cardinality column {key}")
+        ))?;
+        if matching.iter().any(|value| !options.iter().any(|x| &x.value == value)) {
+            return Err(GridError::InvalidValue("Unknown set filter option".into()));
+        }
+        let mut selected: Vec<Value> = match self.model.state.filters.iter().find(|f| f.column == key) {
+            Some(Filter { op: FilterOp::OneOf(values), .. }) => values.clone(),
+            _ => options.iter().map(|item| item.value.clone()).collect(),
+        };
+        for value in matching {
+            if checked {
+                if !selected.contains(value) { selected.push(value.clone()); }
+            } else {
+                selected.retain(|selected| selected != value);
+            }
+        }
+        self.set_column_values(key, selected)
+    }
+
     /// Export exactly the current filtered/sorted rows and current column order.
     /// Formula-like user text is escaped by the core CSV encoder.
     pub fn export_visible_csv(&self) -> Result<String, GridError> {
@@ -332,6 +382,12 @@ impl TableDelegate for GridDelegate {
             self.model.column_index(&key).expect("displayed column key is in the schema")
         ].data_type;
         let active = self.model.state.filters.iter().any(|filter| filter.column == key);
+        let set_values = self.header_set_values.get(&key).cloned();
+        let set_selected = self.model.state.filters.iter().find(|f| f.column == key)
+            .and_then(|f| match &f.op {
+                FilterOp::OneOf(values) => Some(values.clone()),
+                _ => None,
+            });
         let sort = self.model.state.sorts.iter().enumerate()
             .find(|(_, sort)| sort.column == key)
             .map(|(priority, sort)| (priority + 1, sort.descending));
@@ -372,6 +428,28 @@ impl TableDelegate for GridDelegate {
             self.header_inputs.insert(key.clone(), input.clone());
             input
         };
+        let set_search = if set_values.is_some() {
+            Some(if let Some(input) = self.header_set_search.get(&key) {
+                input.clone()
+            } else {
+                let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search values..."));
+                let subscription = cx.subscribe_in(
+                    &search, window,
+                    |table, _, event: &InputEvent, _, cx| {
+                        // Query only narrows checkbox candidates; it does not
+                        // mutate filtered rows until a checkbox is toggled.
+                        if matches!(event, InputEvent::Change) {
+                            table.refresh(cx);
+                        }
+                    },
+                );
+                self.header_subscriptions.push(subscription);
+                self.header_set_search.insert(key.clone(), search.clone());
+                search
+            })
+        } else {
+            None
+        };
         let input_focus = if data_type != DataType::Boolean {
             Some(input.focus_handle(cx))
         } else { None };
@@ -379,6 +457,7 @@ impl TableDelegate for GridDelegate {
             key,
             name: presentation.name,
             data_type, filter_active: active, sort,
+            set_values, set_selected, set_search,
             input, input_focus, table: cx.entity(), errors: self.header_errors.clone(),
         })
     }

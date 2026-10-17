@@ -75,4 +75,4 @@ Do not assume `cargo run` works on headless Linux without a compatible GPU/windo
 - Do not expose extra mutable browser debugging hooks. WASM exports may provide **read-only counters** for test assertions, never JS-side table mutation.
 - Prefer `gpui_kit::component::* ` and GPUI-native interaction components; reproduce common AG Grid **behavior**, not copyrighted artwork.
 
-For detailed patterns, consult [Architecture](docs/ARCHITECTURE.md) and [Agent Workflow](docs/AGENT_WORKFLOW.md).
+For detailed patterns, consult [Architecture](docs/ARCHITECTURE.md), [AG Grid parity matrix](docs/AG_GRID_PARITY.md) and [Agent Workflow](docs/AGENT_WORKFLOW.md).

@@ -4,12 +4,14 @@
 //! documentation website or an example-only toolbar. The actions mutate the
 //! authoritative Rust GridModel and refresh the same GPUI DataTable on desktop
 //! and WebAssembly.
-use crate::{DataType, FilterOp, GridDelegate};
+use crate::{quartz::QUARTZ_LIGHT, showcase::publish_visible_rows, DataType, DistinctValue, FilterOp, GridDelegate, Value};
 use gpui_kit::*;
 use gpui_kit::base::StyledExt as _;
 use gpui_kit::component::{
     button::{Button, ButtonVariants},
-    Sizable,
+    checkbox::Checkbox,
+    scroll::ScrollableElement as _,
+    Disableable as _, Sizable,
     input::{Input, InputState},
     popover::Popover,
     table::TableState,
@@ -27,8 +29,17 @@ thread_local! {
     static OPEN_HEADER_MENU: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
+pub(crate) fn record_set_search_enter(key: &str, valid: bool, visible_rows: usize) {
+    if valid { publish_visible_rows(visible_rows); }
+    record_action(format!(
+        "set-search:{}:{}:{}",
+        key, if valid { "apply" } else { "error" }, visible_rows
+    ));
+}
+
 pub(crate) fn record_enter_filter(column_key: &str, accepted: bool, visible_rows: usize) {
     if accepted {
+        publish_visible_rows(visible_rows);
         record_action(format!("filter:{}:enter:{}", column_key, visible_rows));
     } else {
         record_action(format!("error:{}:enter", column_key));
@@ -69,6 +80,10 @@ pub(crate) struct HeaderSpec {
     pub sort: Option<(usize, bool)>,
     pub input: Entity<InputState>,
     pub input_focus: Option<FocusHandle>,
+    pub set_values: Option<Vec<DistinctValue>>,
+    /// None => all visible options are implicitly selected. Some([]) means none.
+    pub set_selected: Option<Vec<Value>>,
+    pub set_search: Option<Entity<InputState>>,
     pub table: Entity<TableState<GridDelegate>>,
     pub errors: HeaderErrors,
 }
@@ -157,6 +172,7 @@ fn filter_button(
                 Ok(_) => {
                     errors.borrow_mut().remove(&key);
                     let visible = target.read(cx).delegate().row_count();
+                    publish_visible_rows(visible);
                     record_action(format!("filter:{}:{}:{}", key, slug, visible));
                 }
                 Err(error) => {
@@ -189,6 +205,7 @@ fn clear_filter_button(
             match result {
                 Ok(_) => {
                     errors.borrow_mut().remove(&key);
+                    publish_visible_rows(target.read(cx).delegate().row_count());
                     record_action(format!("filter-clear:{}", key));
                 }
                 Err(error) => { errors.borrow_mut().insert(key.clone(), error.to_string()); }
@@ -235,6 +252,73 @@ fn show_columns_button(key: &str, table: &Entity<TableState<GridDelegate>>) -> B
         })
 }
 
+
+fn matching_set_values(values: &[DistinctValue], query: &str) -> Vec<Value> {
+    let query = query.trim().to_lowercase();
+    values.iter().filter(|option|
+        option.value.text().to_lowercase().contains(&query)
+    ).map(|option| option.value.clone()).collect()
+}
+
+/// Checkboxes are controlled widgets. Always read the current authoritative
+/// Rust model before changing a selection, not a stale rendered checkbox.
+fn set_option_checkbox(
+    key: &str, table: &Entity<TableState<GridDelegate>>,
+    value: &Value, checked: bool,
+) -> impl IntoElement {
+    let key = key.to_owned();
+    let cell = value.clone();
+    let target = table.clone();
+    Checkbox::new(format!("grid-set-choice-{}-{}", key, cell.text()))
+        .checked(checked)
+        .label(if matches!(cell, Value::Empty) {
+            "(Blanks)".to_owned()
+        } else {
+            cell.text()
+        })
+        .small()
+        .on_change(move |_, _, cx| {
+            let result = target.update(cx, |state, cx| {
+                let result = state.delegate_mut().toggle_column_value(&key, cell.clone());
+                if result.is_ok() { state.refresh(cx); }
+                result.map(|_| state.delegate().row_count())
+            });
+            if let Ok(count) = result {
+                publish_visible_rows(count);
+                record_action(format!("set:{}:{}:{}", key, cell.text(), count));
+            }
+            cx.stop_propagation();
+        })
+}
+
+fn select_all_checkbox(
+    key: &str, table: &Entity<TableState<GridDelegate>>,
+    matching: Vec<Value>, checked: bool,
+) -> impl IntoElement {
+    let key = key.to_owned();
+    let target = table.clone();
+    Checkbox::new(format!("grid-set-select-all-{}", key))
+        .checked(checked)
+        .disabled(matching.is_empty())
+        .label("(Select All)")
+        .small()
+        .on_change(move |state, _, cx| {
+            let result = target.update(cx, |table, cx| {
+                let result = table.delegate_mut().set_matching_values(&key, &matching, *state);
+                if result.is_ok() { table.refresh(cx); }
+                result.map(|_| table.delegate().row_count())
+            });
+            if let Ok(count) = result {
+                publish_visible_rows(count);
+                record_action(format!(
+                    "set-all:{}:{}:{}",
+                    key, if *state { "checked" } else { "unchecked" }, count
+                ));
+            }
+            cx.stop_propagation();
+        })
+}
+
 /// Called by the reusable GPUI TableDelegate::render_th (not by the docs page).
 pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
     let filter_active = spec.filter_active;
@@ -268,7 +352,8 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
             // GPUI WebPlatform canvas. Header sort and column visibility live
             // ABOVE the filter editor rather than below a potentially clipped
             // popover surface.
-            let mut pane = div().w(px(282.)).flex().flex_col().gap_1().text_sm()
+            let mut pane = div().w(px(292.)).flex().flex_col().gap_1().text_sm()
+                .bg(rgb(QUARTZ_LIGHT.surface)).text_color(rgb(QUARTZ_LIGHT.foreground))
                 .child(div().font_bold().text_color(rgb(0x263854))
                     .child(format!("Column · {}", spec.name)))
                 .child(div().flex().flex_wrap().gap_1()
@@ -327,6 +412,43 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
                     )));
             }
             pane = pane.child(clear_filter_button(&spec.key, &spec.table, &spec.errors));
+
+            // AG Grid-inspired native Set Filter: mini-search, Select All and
+            // checked candidates. This entire subtree is real GPUI, never
+            // a JavaScript table nor an AG Grid Enterprise implementation.
+            if let (Some(values), Some(search)) = (&spec.set_values, &spec.set_search) {
+                let query = search.read(cx).value().to_string();
+                let matching = matching_set_values(values, &query);
+                let selected = spec.set_selected.as_ref();
+                let selected_count = selected.map_or(values.len(), Vec::len);
+                let all_matching_checked = !matching.is_empty()
+                    && matching.iter().all(|value| selected.is_none_or(|set| set.contains(value)));
+                let mut entries = div().flex().flex_col().gap_1()
+                    .child(select_all_checkbox(
+                        &spec.key, &spec.table, matching.clone(), all_matching_checked
+                    ));
+                for option in values.iter().filter(|option| matching.contains(&option.value)) {
+                    let checked = selected.is_none_or(|set| set.contains(&option.value));
+                    entries = entries.child(div().flex().items_center().justify_between().gap_2()
+                        .child(set_option_checkbox(
+                            &spec.key, &spec.table, &option.value, checked
+                        ))
+                        .child(div().text_xs().text_color(rgb(QUARTZ_LIGHT.muted))
+                            .child(option.count.to_string())));
+                }
+                pane = pane.child(div()
+                    .border_t_1().border_color(rgb(0xe3e8ef)).pt_1()
+                    .flex().justify_between().items_center()
+                    .child(div().font_bold().text_color(rgb(0x344b63)).child("Set Filter"))
+                    .child(div().text_xs().text_color(rgb(0x6a7f98))
+                        .child(format!("{selected_count}/{}", values.len()))))
+                    .child(Input::new(search)
+                        .aria_label(format!("Search {} values", spec.name))
+                        .w_full())
+                    .child(div().id(format!("grid-set-options:{}", spec.key))
+                        .max_h(px(180.0)).overflow_y_scrollbar()
+                        .child(entries));
+            }
             if let Some(error) = spec.errors.borrow().get(&spec.key).cloned() {
                 pane = pane.child(div().text_xs().text_color(rgb(0xbb3551)).child(error));
             }
@@ -337,6 +459,8 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
         format!("{}{}", if desc { "↓" } else { "↑" }, priority)
     });
     div().size_full().flex().items_center().justify_between().gap_1()
+        .bg(rgb(QUARTZ_LIGHT.header_background))
+        .text_color(rgb(QUARTZ_LIGHT.foreground))
         .child(
             div().min_w_0().flex_1().flex().items_center().gap_1()
                 .child(name)
@@ -344,7 +468,7 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
                     this.child(div().text_xs().text_color(rgb(0x3468ba)).child(badge))
                 })
                 .when(filter_active, |this| {
-                    this.child(div().text_color(rgb(0x0f9e87)).child("●"))
+                    this.child(div().text_color(rgb(QUARTZ_LIGHT.accent)).child("●"))
                 })
         )
         .child(popover)

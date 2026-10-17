@@ -4,7 +4,7 @@ use crate::{CellAddress, DataType, Edit, GridDelegate, InlineEditor, InlineEdito
 use gpui_kit::*;
 use gpui_kit::base::StyledExt;
 use gpui_kit::component::button::Button;
-use gpui_kit::component::input::{InputEvent, InputState};
+use gpui_kit::component::input::{Escape, InputEvent, InputState};
 use gpui_kit::component::table::{DataTable, TableEvent, TableState};
 
 // Read-only diagnostics for the Chromium smoke test. The actual button and
@@ -291,6 +291,17 @@ impl Render for GridShowcase {
         let only_completed = self.table.clone();
         let show_all = self.table.clone();
         let mut content = div().size_full().flex().flex_col().bg(rgb(0xf7f9fc))
+            // The GPUI InputState binds Escape as an action. Once the input
+            // owns focus its action is dispatched instead of a raw KeyDown,
+            // so the grid must capture the action before the input consumes it.
+            .capture_action(cx.listener(|this, _: &Escape, _, cx| {
+                if this.editor.is_some() {
+                    this.cancel_edit(cx);
+                    cx.stop_propagation();
+                } else {
+                    cx.propagate();
+                }
+            }))
             .capture_key_down(cx.listener(Self::on_grid_key_down))
             .child(
                 div().flex().items_center().justify_between()

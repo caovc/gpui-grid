@@ -4,7 +4,7 @@
 //! documentation website or an example-only toolbar. The actions mutate the
 //! authoritative Rust GridModel and refresh the same GPUI DataTable on desktop
 //! and WebAssembly.
-use crate::{quartz::QUARTZ_LIGHT, DataType, DistinctValue, FilterOp, GridDelegate, Value};
+use crate::{quartz::QUARTZ_LIGHT, showcase::publish_visible_rows, DataType, DistinctValue, FilterOp, GridDelegate, Value};
 use gpui_kit::*;
 use gpui_kit::base::StyledExt as _;
 use gpui_kit::component::{
@@ -30,6 +30,7 @@ thread_local! {
 }
 
 pub(crate) fn record_set_search_enter(key: &str, valid: bool, visible_rows: usize) {
+    if valid { publish_visible_rows(visible_rows); }
     record_action(format!(
         "set-search:{}:{}:{}",
         key, if valid { "apply" } else { "error" }, visible_rows
@@ -38,6 +39,7 @@ pub(crate) fn record_set_search_enter(key: &str, valid: bool, visible_rows: usiz
 
 pub(crate) fn record_enter_filter(column_key: &str, accepted: bool, visible_rows: usize) {
     if accepted {
+        publish_visible_rows(visible_rows);
         record_action(format!("filter:{}:enter:{}", column_key, visible_rows));
     } else {
         record_action(format!("error:{}:enter", column_key));
@@ -170,6 +172,7 @@ fn filter_button(
                 Ok(_) => {
                     errors.borrow_mut().remove(&key);
                     let visible = target.read(cx).delegate().row_count();
+                    publish_visible_rows(visible);
                     record_action(format!("filter:{}:{}:{}", key, slug, visible));
                 }
                 Err(error) => {
@@ -202,6 +205,7 @@ fn clear_filter_button(
             match result {
                 Ok(_) => {
                     errors.borrow_mut().remove(&key);
+                    publish_visible_rows(target.read(cx).delegate().row_count());
                     record_action(format!("filter-clear:{}", key));
                 }
                 Err(error) => { errors.borrow_mut().insert(key.clone(), error.to_string()); }
@@ -280,6 +284,7 @@ fn set_option_checkbox(
                 result.map(|_| state.delegate().row_count())
             });
             if let Ok(count) = result {
+                publish_visible_rows(count);
                 record_action(format!("set:{}:{}:{}", key, cell.text(), count));
             }
             cx.stop_propagation();
@@ -304,6 +309,7 @@ fn select_all_checkbox(
                 result.map(|_| table.delegate().row_count())
             });
             if let Ok(count) = result {
+                publish_visible_rows(count);
                 record_action(format!(
                     "set-all:{}:{}:{}",
                     key, if *state { "checked" } else { "unchecked" }, count

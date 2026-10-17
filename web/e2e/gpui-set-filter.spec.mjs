@@ -51,3 +51,50 @@ test('Set Filter renders native GPUI checkboxes and changes the Rust data view',
   await info.attach('quartz-set-filter-selected.png', {body: await canvas.screenshot(),contentType:'image/png'});
   expect(errors).toEqual([]);
 });
+
+test('Set Filter mini-search uses GPUI InputState and Enter to select matching typed values', async ({page}, info) => {
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.stack || e.message));
+  const inspect = () => page.frameLocator('#gpui-frame').locator('body').evaluate(async () => {
+    const wasm = await import('./pkg/gpui_grid_web.js');
+    return {
+      menu: wasm.preview_open_header_menu(),
+      last: wasm.preview_last_header_action(),
+      rows: wasm.preview_visible_rows(),
+    };
+  });
+
+  await page.goto('/?feature=filtering', {waitUntil: 'domcontentloaded'});
+  await expect(page.locator('#runtime')).toContainText('GPUI WASM initialized', {timeout: 100_000});
+  const canvas = page.frameLocator('#gpui-frame').locator('body > canvas');
+  await expect(canvas).toBeVisible();
+  await openCustomerHeaderMenu(canvas, inspect);
+  await page.evaluate(() => {
+    const iframe = document.querySelector('#gpui-frame');
+    window.scrollTo({
+      top: iframe.getBoundingClientRect().top + window.scrollY - 105,
+      behavior:'instant',
+    });
+  });
+
+  // The mini-search is native GPUI InputState in the opened Customer menu.
+  // This is a Canvas click, not a browser DOM input or a JS data filter.
+  await canvas.click({position:{x:440,y:418}});
+  await page.keyboard.insertText('Sophia');
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await inspect()).last, {
+    timeout: 15_000,
+    message:'GPUI Enter should apply matching Set Filter values in Rust',
+  }).toMatch(/^set-search:customer:apply:[0-9]+$/);
+
+  const state = await inspect();
+  const rowCount = Number(state.last.split(':').at(-1));
+  expect(rowCount).toBeGreaterThan(0);
+  expect(rowCount).toBeLessThan(12_480);
+  expect(state.rows, 'read-only WASM visible-row diagnostic must follow actual GPUI filter state')
+    .toBe(rowCount);
+  await info.attach('quartz-set-mini-search-sophia.png', {
+    body:await canvas.screenshot(), contentType:'image/png',
+  });
+  expect(errors).toEqual([]);
+});

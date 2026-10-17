@@ -110,7 +110,7 @@ pub fn preview_visible_columns() -> u32 {
     PREVIEW_VISIBLE_COLUMNS.with(std::cell::Cell::get) as u32
 }
 
-fn publish_visible_rows(count: usize) {
+pub(crate) fn publish_visible_rows(count: usize) {
     #[cfg(target_family = "wasm")]
     PREVIEW_VISIBLE_ROWS.with(|rows| rows.set(count));
     #[cfg(not(target_family = "wasm"))]

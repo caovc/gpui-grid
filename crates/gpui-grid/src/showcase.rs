@@ -7,7 +7,14 @@ use gpui_kit::component::button::Button;
 use gpui_kit::component::input::{Escape, InputEvent, InputState};
 use gpui_kit::component::table::{DataTable, TableEvent, TableState};
 
-gpui_kit::actions!(gpui_grid, [CommitEditorNext, CommitEditorPrevious]);
+gpui_kit::actions!(
+    gpui_grid,
+    [
+        CommitEditorNext, CommitEditorPrevious,
+        ExtendSelectionUp, ExtendSelectionDown, ExtendSelectionLeft, ExtendSelectionRight,
+        SelectGridAll,
+    ]
+);
 
 // Read-only diagnostics for the Chromium smoke test. The actual button and
 // editor handlers below publish counts after mutating the real Rust model.
@@ -80,6 +87,9 @@ pub struct GridShowcase {
     table: Entity<TableState<GridDelegate>>,
     inline_editor: InlineEditorSlot,
     selected: Option<CellAddress>,
+    /// One-shot override: keyboard Shift+Arrow selection must retain its
+    /// anchor even if modifier state changes before TableEvent delivery.
+    keyboard_extend_to: Option<CellAddress>,
     editor: Option<EditSession>,
     feedback: Option<String>,
     _table_subscription: Subscription,
@@ -95,6 +105,11 @@ impl GridShowcase {
         cx.bind_keys([
             KeyBinding::new("tab", CommitEditorNext, Some("GPUIGridInlineEditor")),
             KeyBinding::new("shift-tab", CommitEditorPrevious, Some("GPUIGridInlineEditor")),
+            KeyBinding::new("shift-up", ExtendSelectionUp, Some("DataTable")),
+            KeyBinding::new("shift-down", ExtendSelectionDown, Some("DataTable")),
+            KeyBinding::new("shift-left", ExtendSelectionLeft, Some("DataTable")),
+            KeyBinding::new("shift-right", ExtendSelectionRight, Some("DataTable")),
+            KeyBinding::new("secondary-a", SelectGridAll, Some("DataTable")),
         ]);
         let data = sample_orders(12_480);
         publish_visible_rows(data.len());
@@ -113,6 +128,7 @@ impl GridShowcase {
                 table,
                 inline_editor,
                 selected: None,
+                keyboard_extend_to: None,
                 editor: None,
                 feedback: None,
                 _table_subscription: subscription,
@@ -133,7 +149,15 @@ impl GridShowcase {
                 let address = table.read(cx).delegate().cell_info(*row_ix, *col_ix).map(|info| info.address);
                 // TableState is emitting now: defer the model update rather
                 // than borrowing the emitting state mutably a second time.
-                let extend = window.modifiers().shift;
+                let extend = if self.keyboard_extend_to.as_ref() == address.as_ref()
+                    && address.is_some()
+                {
+                    self.keyboard_extend_to.take();
+                    true
+                } else {
+                    self.keyboard_extend_to = None;
+                    window.modifiers().shift
+                };
                 self.selected = address.clone();
                 if let Some(address) = address {
                     let target = table.clone();
@@ -150,6 +174,7 @@ impl GridShowcase {
             }
             TableEvent::ClearSelection => {
                 self.selected = None;
+                self.keyboard_extend_to = None;
                 let target = table.clone();
                 cx.defer(move |cx| {
                     let _ = target.update(cx, |state, cx| {
@@ -306,6 +331,61 @@ impl GridShowcase {
         }
     }
 
+    /// Extend from the current GPUI-selected cell, preserving a stable Rust
+    /// anchor. The TableState mutation is deferred to avoid reentering the
+    /// table (and its TableEvent listener) during the parent action callback.
+    fn extend_by_arrow(&mut self, row_delta: isize, col_delta: isize, cx: &mut Context<Self>) {
+        if self.editor.is_some() {
+            cx.propagate();
+            return;
+        }
+        let target = {
+            let state = self.table.read(cx);
+            let delegate = state.delegate();
+            let rows = delegate.row_count();
+            let cols = delegate.displayed_columns_count();
+            if rows == 0 || cols == 0 {
+                return;
+            }
+            let (row, col) = state.selected_cell().unwrap_or((0, 0));
+            let row = (row as isize + row_delta).clamp(0, (rows - 1) as isize) as usize;
+            let col = (col as isize + col_delta).clamp(0, (cols - 1) as isize) as usize;
+            delegate.cell_info(row, col).map(|info| info.address)
+        };
+        if let Some(address) = target {
+            self.keyboard_extend_to = Some(address.clone());
+            let table = self.table.clone();
+            cx.defer(move |cx| {
+                let _ = table.update(cx, |state, cx| {
+                    // Resolve the stable address again in case row order changed.
+                    if let Some((row, col)) = state.delegate().display_position(&address) {
+                        state.set_selected_cell(row, col, cx);
+                    }
+                });
+            });
+            cx.stop_propagation();
+        }
+    }
+
+    /// Select only currently visible rows/columns; no cells are materialized.
+    fn select_all_cells(&mut self, cx: &mut Context<Self>) {
+        if self.editor.is_some() {
+            cx.propagate();
+            return;
+        }
+        let result = self.table.update(cx, |state, cx| {
+            let result = state.delegate_mut().select_all_visible();
+            if result.is_ok() {
+                publish_selected_cells(state.delegate().selected_cell_count());
+                state.refresh(cx);
+            }
+            result
+        });
+        if result.is_ok() {
+            cx.stop_propagation();
+        }
+    }
+
     /// F2 is not bound by DataTable. Escape is intercepted as the input's
     /// Escape action in Render because raw keydown is consumed by GPUI.
     fn on_grid_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -357,6 +437,21 @@ impl Render for GridShowcase {
             .on_action(cx.listener(|this, _: &CommitEditorPrevious, window, cx| {
                 this.commit_and_advance(true, window, cx);
             }))
+            .on_action(cx.listener(|this, _: &ExtendSelectionUp, _, cx| {
+                this.extend_by_arrow(-1, 0, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtendSelectionDown, _, cx| {
+                this.extend_by_arrow(1, 0, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtendSelectionLeft, _, cx| {
+                this.extend_by_arrow(0, -1, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtendSelectionRight, _, cx| {
+                this.extend_by_arrow(0, 1, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectGridAll, _, cx| {
+                this.select_all_cells(cx);
+            }))
             .child(
                 div().flex().items_center().justify_between()
                     .px_6().py_4().bg(rgb(0xffffff))
@@ -364,7 +459,7 @@ impl Render for GridShowcase {
                     .child(
                         div().flex().flex_col().gap_1()
                             .child(div().text_xl().font_bold().text_color(rgb(0x273550)).child("GPUI Grid"))
-                            .child(div().text_sm().text_color(rgb(0x7d899b)).child("Rust GPUI • Desktop + WebAssembly • In-cell edit: double-click / F2, Enter / Tab, Esc"))
+                            .child(div().text_sm().text_color(rgb(0x7d899b)).child("Rust GPUI • Desktop + WASM • Shift+Click / Shift+Arrows range • Cmd/Ctrl+A all • F2 edit"))
                     )
                     .child(
                         div().flex().gap_2()

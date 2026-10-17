@@ -22,12 +22,21 @@ test('Set Filter renders native GPUI checkboxes and changes the Rust data view',
   await openCustomerHeaderMenu(canvas, inspect);
   await info.attach('quartz-set-filter-open.png', {body: await canvas.screenshot(),contentType:'image/png'});
 
-  // The Set Filter follows the regular type filter buttons. The x/y points
-  // target its checkbox region, NOT a JavaScript table. If a browser version
-  // shifts the popover, uploaded screenshot/trace makes it diagnosable.
-  const points = [[425, 505], [425, 525], [425, 545], [425, 565], [425, 585]];
+  // A 690px GPUI Canvas starts lower on the documentation page. The popup
+  // and checkboxes are correctly painted inside the frame, but the browser
+  // viewport must scroll so its lower Canvas pixels can receive pointer hits.
+  // Scroll only the outer docs page; leave native GPUI state untouched.
+  await page.evaluate(() => {
+    const iframe = document.querySelector('#gpui-frame');
+    window.scrollTo({
+      top: iframe.getBoundingClientRect().top + window.scrollY - 105,
+      behavior: 'instant',
+    });
+  });
+  await expect.poll(async () => (await inspect()).menu).toBe('customer');
+  const points = [[425, 460], [425, 485], [425, 505], [425, 530], [425, 555]];
   for (const [x, y] of points) {
-    await canvas.click({position:{x,y}});
+    await canvas.click({position:{x,y}, timeout: 10_000});
     const {last} = await inspect();
     if (/^set(?:-all)?:customer:/.test(last)) break;
   }

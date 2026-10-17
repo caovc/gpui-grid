@@ -213,7 +213,6 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
                 pane = pane.child(
                     Input::new(&spec.input)
                         .aria_label(format!("Filter {}", spec.name))
-                        .placeholder("Filter value")
                         .w_full()
                 );
                 pane = match spec.data_type {

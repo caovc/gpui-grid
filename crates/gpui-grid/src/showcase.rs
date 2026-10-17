@@ -165,7 +165,7 @@ impl GridShowcase {
         if let Some(editor) = self.editor.as_ref() {
             let input = editor.input.clone();
             input.update(cx, |state, cx| {
-                state.set_value(if value { "true" } else { "false" }.into(), window, cx);
+                state.set_value(if value { "true" } else { "false" }, window, cx);
             });
         }
     }

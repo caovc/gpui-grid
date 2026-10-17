@@ -5,7 +5,8 @@ test('canvas viewer loads wasm-bindgen output and executes Rust entry point',asy
   const source=await readFile(new URL('./viewer/loader.js',import.meta.url),'utf8');
   assert.match(source,/import\('\.\/pkg\/gpui_grid_web\.js'\)/);
   assert.match(source,/await wasm\.default\(\)/);
-  assert.match(source,/wasm\.run\(\)/);
+  assert.match(source,/wasm\.run\(feature\)/);
+  assert.match(source,/new URLSearchParams\(window.location.search\)/);
   assert.doesNotMatch(source,/new DataTable|renderRow\(/);
 });
 test('site build refuses to publish a mock site without a real WASM binary',async()=>{

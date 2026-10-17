@@ -4,7 +4,7 @@ An independent, AG Grid-inspired data-grid component. **The website now runs the
 
 The GPUI Kit browser backend is currently **showcase-only / experimental**; do not assume full production browser, accessibility or mobile input support.
 
-🧪 [Real GPUI WASM browser E2E tests](docs/BROWSER_E2E.md) · 📋 [Development roadmap / 后续开发路线图](docs/ROADMAP.md) · [Tracking epic #1](https://github.com/caovc/gpui-grid/issues/1) · [Current issues](https://github.com/caovc/gpui-grid/issues)
+📚 [按功能浏览在线文档 / Feature-based live docs](https://caovc.github.io/gpui-grid/?feature=overview) · 🧪 [Real GPUI WASM browser E2E tests](docs/BROWSER_E2E.md) · 📋 [Development roadmap / 后续开发路线图](docs/ROADMAP.md) · [Tracking epic #1](https://github.com/caovc/gpui-grid/issues/1) · [Current issues](https://github.com/caovc/gpui-grid/issues)
 
 ## Source layout
 
@@ -14,7 +14,7 @@ crates/gpui-grid/               Native GPUI Kit DataTable delegate + shared Grid
 crates/gpui-grid-web/           wasm-bindgen exports: real GPUI WebPlatform entry
 examples/native/                Native desktop launches exactly the shared GridShowcase
 scripts/build-wasm.sh           Rust wasm32 compile + wasm-bindgen; downloads OFL fonts
-web/                            HTML frame/loader + browser chrome, NO JS grid renderer
+web/                            AG Grid-inspired feature documentation + Rust WASM gallery host; NO JS grid renderer
 .github/workflows/ci.yml        Rust core, native GPUI, real wasm32 CI builds
 .github/workflows/pages.yml     Builds real WASM and deploys to GitHub Pages
 ```
@@ -39,7 +39,7 @@ The upstream `wasm_thread` 0.3.3 dependency currently requires an unstable Rust 
 
 `gpui-grid-web` is a real `cdylib` crate. It builds the same `GridShowcase` Rust `Render` tree that the native desktop executable starts. The JS host only loads `gpui_grid_web.js`, initializes `gpui_grid_web_bg.wasm`, and calls Rust's exported `run()`; GPUI WebPlatform paints the actual UI into a canvas via WebGPU/WebGL2. Build **fails** if the WASM artifact is missing, rather than silently serving a mock.
 
-**Features actually wired to this shared GPUI view:** virtual scrolling via GPUI Kit DataTable, column drag/resize, native GPUI sorting/selection, and quick filtering using “Completed only” / “All rows”. `gpui-grid-core` also supports richer filtering, editing, grouping and CSV exports, but some of these features still lack native/WASM UI and should not be claimed to work in the browser. See [feature matrix](docs/FEATURES.md).
+**Live documentation examples:** The site has feature-specific genuine Rust GPUI demos for Overview, Sorting, Filtering, Cell Selection, Cell Editing, Columns, and Virtualization (50k local rows). The page URL accepts `?feature=sorting`, `?feature=filtering`, `?feature=selection`, etc. The `web/catalog.js` module contains *documentation only*; it never stores data rows or simulates a grid. The viewer passes the selected feature to the `gpui-grid-web` Rust WebAssembly entry point, which creates the same `GridShowcase` used by native GPUI desktop apps. Advanced Grouping, Clipboard, Async RowModel, and Pivot pages are explicitly marked Core-only or Planned. See [feature matrix](docs/FEATURES.md) and [website architecture](docs/WEBSITE.md).
 
 ### Browser limitations
 

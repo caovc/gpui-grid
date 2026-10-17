@@ -7,11 +7,11 @@ The docs site is a **feature-indexed static shell**, not a JavaScript grid appli
 | Route | Actual Rust GPUI example |
 |---|---|
 | `/?feature=overview` | Same base `GridShowcase::new` and 12,480-row DataTable |
-| `/?feature=sorting` | Header sorting plus numeric Revenue asc/desc/reset in Rust |
-| `/?feature=filtering` | Typed Revenue > 5000 filter plus quick-filter buttons |
-| `/?feature=selection` | Real Shift+click, Shift+arrows, Ctrl/Cmd+A + Rust select/clear |
+| `/?feature=sorting` | Real GPUI column menu: ascending/descending, clear and Add Multi-sort |
+| `/?feature=filtering` | Native GPUI header InputState and typed filter operators |
+| `/?feature=selection` | GPUI Shift+click, Shift+arrows and Ctrl/Cmd+A without demo buttons |
 | `/?feature=editing` | Shared in-cell GPUI InputState and Edit transaction |
-| `/?feature=columns` | GPUI drag/resize/pinning and Rust hide/show Growth |
+| `/?feature=columns` | GPUI drag/resize/pinning and header Hide column / Show all |
 | `/?feature=virtualization` | 50,000 local Rust rows with GPUI Kit virtual list |
 | `/?feature=grouping` | Core-only notice; no fake GPU/JS implementation |
 | `/?feature=clipboard`, `server-side`, `pivot` | Planned notice; no fake live example |

@@ -80,3 +80,49 @@ test('actual Rust/GPUI WebAssembly paints and handles real canvas click events',
     });
   }
 });
+
+
+test('real GPUI double-click opens Rust editor; typed text is committed through InputState', async ({page}, info) => {
+  const uncaughtErrors = [];
+  const consoleErrors = [];
+  page.on('pageerror', error => uncaughtErrors.push(error.stack || error.message));
+  // GPUI WebPlatform may report recoverable asset misses or repeated bootstrap
+  // diagnostics at console.error level. Capture them without falsely marking a
+  // successful Rust edit transaction as a fatal browser exception.
+  page.on('console', event => {if(event.type() === 'error') consoleErrors.push(event.text());});
+  try {
+    await page.goto('/', {waitUntil: 'domcontentloaded'});
+    await expect(page.locator('#runtime')).toContainText('GPUI WASM initialized', {timeout: 100_000});
+    const frame = page.frameLocator('#gpui-frame');
+    const canvas = frame.locator('body > canvas');
+    await expect(canvas).toBeVisible();
+
+    // The first data row begins ~145 px below the GPUI canvas origin; 240px
+    // lands in its editable Customer cell, not the read-only Order ID column.
+    // This is a real double-click dispatched to GPUI's TableEvent pipeline.
+    await canvas.dblclick({position: {x: 240, y: 158}, delay: 80});
+    const diag = () => frame.locator('body').evaluate(async () => {
+      const wasm = await import('./pkg/gpui_grid_web.js');
+      return {editing: wasm.preview_active_editor_row_id(), saved: wasm.preview_last_saved_edit()};
+    });
+    await expect.poll(async () => (await diag()).editing, {
+      timeout: 15_000, message: 'Double-click should open the Rust GPUI CellEditor for row 1',
+    }).toBe(1);
+    await info.attach('real-gpui-cell-editor-open.png', {body: await canvas.screenshot(), contentType: 'image/png'});
+
+    // GPUI input is focused by Rust when the edit session begins. Type via the
+    // browser keyboard/IME path; NEVER call a JS model mutation or fake grid.
+    const marker = '-playwright-typed';
+    await page.keyboard.insertText(marker);
+    await page.keyboard.press('Enter');
+    await expect.poll(async () => (await diag()).editing, {
+      timeout: 15_000, message: 'PressEnter should commit the Rust GPUI edit',
+    }).toBe(0);
+    expect((await diag()).saved).toContain('1:customer:');
+    expect((await diag()).saved).toContain(marker);
+    await info.attach('real-gpui-cell-editor-committed.png', {body: await canvas.screenshot(), contentType: 'image/png'});
+    expect(uncaughtErrors, 'no uncaught JavaScript/WASM exceptions').toEqual([]);
+  } finally {
+    await info.attach('editor-browser-errors.json', {body: JSON.stringify({uncaughtErrors, consoleErrors: consoleErrors.slice(-120), totalConsoleErrors: consoleErrors.length}, null, 2), contentType: 'application/json'});
+  }
+});

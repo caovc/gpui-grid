@@ -330,6 +330,7 @@ pub fn sample_orders(count:usize)->GridModel{
         Column::new("status","Status",DataType::Text).width(145.0),
         Column::new("units","Units",DataType::Number).width(105.0),
         Column::new("score","Health Score",DataType::Number).width(145.0),
+        Column::new("verified","Verified",DataType::Boolean).width(112.0),
     ];
     let mut rows=Vec::with_capacity(count);
     for i in 0..count {
@@ -345,6 +346,7 @@ pub fn sample_orders(count:usize)->GridModel{
             Value::from(STATUSES[((n>>17) as usize)%STATUSES.len()]),
             Value::from(((n>>4)%300+1) as f64),
             Value::from(((n>>6)%76+25) as f64),
+            Value::from((n & 1) == 0),
         ]));
     }
     GridModel::new(cols,rows).expect("generated sample data must be valid")
@@ -371,4 +373,10 @@ mod tests {
     #[test] fn duplicate_row_rejected(){let r=GridModel::new(vec![Column::new("k","K",DataType::Text)],vec![Row::new(1,vec!["a".into()]),Row::new(1,vec!["b".into()])]);assert!(matches!(r,Err(GridError::DuplicateRowId(1))));}
     #[test] fn csv_escape_and_formula_guard(){let mut m=model();m.apply_edits(&[Edit{row_id:1,column:"name".into(),value:Value::from("=SUM(1,2)")}]).unwrap();let csv=m.export_csv(&[0], &["name","sum"]).unwrap();assert!(csv.contains("\"'=SUM(1,2)\""));}
     #[test] fn generator_large(){let m=sample_orders(10_000);assert_eq!(m.len(),10_000);assert_eq!(m.view().len(),10_000);assert_eq!(m.row_by_id(10000).unwrap().id,10_000);}
+    #[test] fn sample_dataset_exposes_boolean_editor_column(){
+        let m=sample_orders(4);
+        let col=m.column_index("verified").unwrap();
+        assert_eq!(m.columns[col].data_type,DataType::Boolean);
+        assert!(m.row(0).is_some_and(|row| matches!(&row.cells[col], Value::Boolean(_))));
+    }
 }

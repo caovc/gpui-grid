@@ -20,6 +20,18 @@ mod wasm {
         gpui_grid::showcase::preview_visible_rows() as u32
     }
 
+    /// Read-only editor activity probe for the genuine GPUI Canvas E2E test.
+    #[wasm_bindgen]
+    pub fn preview_active_editor_row_id() -> u32 {
+        gpui_grid::showcase::preview_active_editor_row_id()
+    }
+
+    /// Read-only last-save probe; only the real GPUI Input/Save handler writes it.
+    #[wasm_bindgen]
+    pub fn preview_last_saved_edit() -> String {
+        gpui_grid::showcase::preview_last_saved_edit()
+    }
+
     #[wasm_bindgen]
     pub fn run() -> Result<(), JsValue> {
         console_error_panic_hook::set_once();

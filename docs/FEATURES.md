@@ -14,11 +14,13 @@ One view is used for **desktop native GPUI and the browser's GPUI WebPlatform**.
 | Quick filter (Completed / All) | ✅ | ✅ | ✅ |
 | Complex typed filters | ✅ | API only | API only |
 | Multi-column sort | ✅ | API only | API only |
-| Typed edit transactions | ✅ | API only | API only |
+| Typed edit transactions | ✅ | ✅ via GPUI editor panel (phase 1) | ✅ via same GPUI editor panel (GPU dependent) |
 | CSV export | ✅ | API only | API only |
 | Grouping / aggregation | ✅ | UI not wired | UI not wired |
 | Excel XLSX, Pivot, server-side row model | ❌ | ❌ | ❌ |
 | Browser WebAssembly renderer | n/a | n/a | GPUI WebPlatform + wasm-bindgen |
+
+Editor v1: double-click a visible editable cell or select it and click **Edit cell**; the real GPUI InputState opens above the table. Press Enter or click Save to validate and persist by stable row ID; Cancel leaves the value unchanged. Text, finite numbers, null numeric inputs and boolean true/false are supported. The next editor iteration will add in-cell overlays, F2/Escape/Tab/blur configuration and cross-browser IME checks, so Issue #4 remains open until those are validated.
 
 WASM is **showcase-only**, according to upstream GPUI Kit documentation. Passing `cargo check` is not proof of a running WebGPU/WebGL2 surface: check the browser at the deployed site.
 

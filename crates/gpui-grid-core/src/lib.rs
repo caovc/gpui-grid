@@ -5,6 +5,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 
+mod edit;
+pub use edit::parse_cell_value;
 mod state;
 pub use state::{CellAddress, ColumnState, GridApi, GridEvent, GridOptions, GridState, PinSide};
 

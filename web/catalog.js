@@ -126,8 +126,8 @@ grid.edit(&[Edit {
 
 let mut grid = GridDelegate::new(sample_orders(12_480));
 grid.set_column_visibility("growth", false).unwrap();
-grid.move_visible_column("customer", 2).unwrap();
-grid.set_column_pin_left("customer", true).unwrap();
+grid.move_visible_column("company", 3).unwrap();
+grid.set_column_pin_left("company", true).unwrap();
 grid.reset_columns();
 // Column state resets without changing typed row storage.`,
   },

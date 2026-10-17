@@ -57,3 +57,43 @@ test('GPUI header ⋯ menu filters Customer by typing in its native InputState',
     });
   }
 });
+
+test('native header Popover exposes real Rust sort and column-hide controls', async ({page}, info) => {
+  const browserErrors = [];
+  page.on('pageerror', err => browserErrors.push(err.stack || err.message));
+  const diag = () => page.frameLocator('#gpui-frame').locator('body').evaluate(async () => {
+    const wasm = await import('./pkg/gpui_grid_web.js');
+    return {
+      menu: wasm.preview_open_header_menu(),
+      action: wasm.preview_last_header_action(),
+    };
+  });
+  const canvas = page.frameLocator('#gpui-frame').locator('body > canvas');
+
+  // Open a real GPUI header menu, sort from it, and inspect Rust's action.
+  await page.goto('/?feature=overview', {waitUntil: 'domcontentloaded'});
+  await expect(page.locator('#runtime')).toContainText('GPUI WASM initialized', {timeout: 100_000});
+  await expect(canvas).toBeVisible();
+  await canvas.click({position: {x: 352, y: 125}});
+  await expect.poll(async () => (await diag()).menu).toBe('customer');
+  // The compact menu puts the Descending button in its first actions row.
+  await canvas.click({position: {x: 484, y: 190}});
+  await expect.poll(async () => (await diag()).action, {
+    timeout: 15_000, message: 'header Descending should mutate the Rust GridModel sort',
+  }).toBe('sort:customer:desc');
+  await info.attach('header-menu-descending-sort.png', {body: await canvas.screenshot(),contentType:'image/png'});
+
+  // Start from a fresh model. Hide Customer from its column-header popover,
+  // verifying the result is 9 *Rust* presentation columns, not DOM elements.
+  await page.reload({waitUntil: 'domcontentloaded'});
+  await expect(page.locator('#runtime')).toContainText('GPUI WASM initialized', {timeout: 100_000});
+  await expect(canvas).toBeVisible();
+  await canvas.click({position: {x: 352, y: 125}});
+  await expect.poll(async () => (await diag()).menu).toBe('customer');
+  await canvas.click({position: {x: 405, y: 241}});
+  await expect.poll(async () => (await diag()).action, {
+    timeout: 15_000, message: 'Hide column from native GPUI menu must update Rust column state',
+  }).toBe('column-hide:customer:9');
+  await info.attach('header-menu-hide-column.png', {body: await canvas.screenshot(),contentType:'image/png'});
+  expect(browserErrors).toEqual([]);
+});

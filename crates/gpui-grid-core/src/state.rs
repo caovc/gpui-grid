@@ -102,6 +102,8 @@ pub enum GridEvent {
     ColumnMoved { key: String, from: usize, to: usize },
     ColumnVisibilityChanged { key: String, visible: bool },
     ColumnWidthChanged { key: String, width: f32 },
+    ColumnPinChanged { key: String, pin: PinSide },
+    ColumnStateReset(Vec<ColumnState>),
     FocusChanged { previous: Option<CellAddress>, current: Option<CellAddress> },
     CellsEdited(Vec<CellAddress>),
     SelectionChanged(Option<CellRange>),
@@ -132,6 +134,13 @@ impl<'a> GridApi<'a> {
     pub fn set_filters(&mut self, filters: Vec<Filter>) -> Result<(), GridError> { self.model.set_filters(filters) }
     pub fn set_quick_filter(&mut self, query: impl Into<String>) { self.model.set_quick_filter(query); }
     pub fn move_column(&mut self, key: &str, to: usize) -> Result<(), GridError> { self.model.move_column(key, to) }
+    pub fn move_visible_column(&mut self, key: &str, to_visible: usize) -> Result<(), GridError> {
+        self.model.move_visible_column(key, to_visible)
+    }
+    pub fn set_column_pin(&mut self, key: &str, pin: PinSide) -> Result<(), GridError> {
+        self.model.set_column_pin(key, pin)
+    }
+    pub fn reset_column_state(&mut self) { self.model.reset_column_state(); }
     pub fn set_column_visible(&mut self, key: &str, visible: bool) -> Result<(), GridError> { self.model.set_column_visible(key, visible) }
     pub fn set_column_width(&mut self, key: &str, width: f32) -> Result<(), GridError> { self.model.set_column_width(key, width) }
     pub fn focus_cell(&mut self, cell: Option<CellAddress>) -> Result<(), GridError> { self.model.focus_cell(cell) }
@@ -207,6 +216,65 @@ mod tests {
             assert_eq!(api.drain_events(), vec![GridEvent::CellsEdited(vec![CellAddress::new(10, "name")])]);
         }
         assert_eq!(model.value(0, "name"), Some(&Value::from("Changed")));
+    }
+
+
+    #[test]
+    fn displayed_column_moves_resolve_hidden_indices_and_reject_pinned_boundaries() {
+        let mut grid = model();
+        grid.set_column_visible("score", false).unwrap();
+        grid.drain_events();
+        grid.move_visible_column("id", 0).unwrap();
+        assert_eq!(grid.state.visible_column_keys().collect::<Vec<_>>(), vec!["id", "name"]);
+        assert_eq!(grid.state.columns.iter().map(|c| c.key.as_str()).collect::<Vec<_>>(),
+            vec!["id", "name", "score"]);
+        assert_eq!(grid.columns.iter().map(|c| c.key.as_str()).collect::<Vec<_>>(),
+            vec!["name", "score", "id"], "raw row schema order must never move");
+        assert!(matches!(grid.move_visible_column("score", 0), Err(GridError::InvalidValue(_))));
+        assert_eq!(grid.drain_events(), vec![
+            GridEvent::ColumnMoved { key: "id".into(), from: 2, to: 0 },
+        ]);
+
+        grid.set_column_pin("id", PinSide::Left).unwrap();
+        grid.drain_events();
+        assert!(matches!(grid.move_visible_column("name", 0), Err(GridError::InvalidValue(_))));
+        assert!(grid.drain_events().is_empty(), "rejected cross-boundary move has no event");
+    }
+
+    #[test]
+    fn pin_left_unpin_and_reset_column_state_are_atomic_and_idempotent() {
+        let mut grid = model();
+        grid.set_sorts(vec![Sort::descending("score")]).unwrap();
+        grid.focus_cell(Some(CellAddress::new(10, "name"))).unwrap();
+        grid.drain_events();
+        grid.api().set_column_pin("score", PinSide::Left).unwrap();
+        grid.api().set_column_pin("id", PinSide::Left).unwrap();
+        assert_eq!(grid.state.columns.iter().map(|c| c.key.as_str()).collect::<Vec<_>>(),
+            vec!["score", "id", "name"]);
+        assert!(grid.state.columns[..2].iter().all(|c| c.pin == PinSide::Left));
+        grid.set_column_pin("score", PinSide::None).unwrap();
+        assert_eq!(grid.state.columns.iter().map(|c| c.key.as_str()).collect::<Vec<_>>(),
+            vec!["id", "score", "name"]);
+        assert!(grid.state.columns[0].pin == PinSide::Left);
+        assert!(grid.state.columns[1..].iter().all(|c| c.pin == PinSide::None));
+        let before = grid.state.columns.clone();
+        assert!(matches!(grid.set_column_pin("score", PinSide::Right), Err(GridError::InvalidValue(_))));
+        assert!(matches!(grid.set_column_pin("missing", PinSide::Left), Err(GridError::UnknownColumn(_))));
+        assert_eq!(grid.state.columns, before);
+        grid.set_column_visible("score", false).unwrap();
+        grid.set_column_width("name", 190.0).unwrap();
+        grid.drain_events();
+
+        grid.api().reset_column_state();
+        assert_eq!(grid.state.columns,
+            grid.columns.iter().map(ColumnState::from_column).collect::<Vec<_>>());
+        assert_eq!(grid.state.sorts, vec![Sort::descending("score")]);
+        assert_eq!(grid.state.focus, Some(CellAddress::new(10, "name")));
+        assert_eq!(grid.drain_events(), vec![
+            GridEvent::ColumnStateReset(grid.state.columns.clone())
+        ]);
+        grid.reset_column_state();
+        assert!(grid.drain_events().is_empty());
     }
 
     #[test]

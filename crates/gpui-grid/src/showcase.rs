@@ -1,10 +1,10 @@
 //! A single Rust GPUI view shared by the macOS desktop and WebAssembly viewer.
 //! The editor is a GPUI InputState. JavaScript never stores or modifies grid rows.
-use crate::{CellAddress, DataType, Edit, GridDelegate, parse_cell_value, sample_orders};
+use crate::{CellAddress, DataType, Edit, GridDelegate, InlineEditor, InlineEditorSlot, parse_cell_value, sample_orders};
 use gpui_kit::*;
 use gpui_kit::base::StyledExt;
 use gpui_kit::component::button::Button;
-use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::component::table::{DataTable, TableEvent, TableState};
 
 // Read-only diagnostics for the Chromium smoke test. The actual button and
@@ -63,6 +63,7 @@ struct EditSession {
 
 pub struct GridShowcase {
     table: Entity<TableState<GridDelegate>>,
+    inline_editor: InlineEditorSlot,
     selected: Option<CellAddress>,
     editor: Option<EditSession>,
     feedback: Option<String>,
@@ -83,9 +84,11 @@ impl GridShowcase {
                     .col_resizable(true)
                     .col_movable(true)
             });
+            let inline_editor = table.read(cx).delegate().inline_editor_slot();
             let subscription = cx.subscribe_in(&table, window, Self::on_table_event);
             Self {
                 table,
+                inline_editor,
                 selected: None,
                 editor: None,
                 feedback: None,
@@ -119,15 +122,8 @@ impl GridShowcase {
 
     fn begin_selected_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let selected = self.selected.clone();
-        let info = selected.as_ref().and_then(|selected| {
-            let table = self.table.read(cx);
-            let delegate = table.delegate();
-            let row_ix = (0..delegate.row_count()).find(|&ix| {
-                delegate.visible_row(ix).is_some_and(|row| row.id == selected.row_id)
-            })?;
-            let col_ix = (0..delegate.model.state.visible_column_keys().count())
-                .find(|&ix| delegate.cell_info(row_ix, ix).is_some_and(|cell| cell.address.column_key == selected.column_key))?;
-            delegate.cell_info(row_ix, col_ix)
+        let info = selected.as_ref().and_then(|address| {
+            self.table.read(cx).delegate().cell_info_by_address(address)
         });
         if let Some(info) = info {
             self.start_edit(info, window, cx);
@@ -148,6 +144,7 @@ impl GridShowcase {
     fn start_edit(&mut self, info: crate::CellInfo, window: &mut Window, cx: &mut Context<Self>) {
         if !info.editable {
             self.editor = None;
+            *self.inline_editor.borrow_mut() = None;
             self._input_subscription = None;
             publish_active_edit(0);
             self.feedback = Some(format!("{} is read-only", info.address.column_key));
@@ -156,6 +153,10 @@ impl GridShowcase {
         }
         let input = cx.new(|cx| InputState::new(window, cx).default_value(info.value.text()));
         let subscription = cx.subscribe_in(&input, window, Self::on_input_event);
+        *self.inline_editor.borrow_mut() = Some(InlineEditor {
+            address: info.address.clone(),
+            input: input.clone(),
+        });
         self.editor = Some(EditSession {
             address: info.address,
             data_type: info.data_type,
@@ -178,7 +179,7 @@ impl GridShowcase {
     ) {
         if self.editor.as_ref().is_none_or(|editor| &editor.input != state) { return; }
         match event {
-            InputEvent::PressEnter { .. } => self.commit_edit(cx),
+            InputEvent::PressEnter { .. } => { self.commit_edit(cx); },
             InputEvent::Change => {
                 if let Some(editor) = self.editor.as_mut() {
                     editor.error = None;
@@ -230,6 +231,7 @@ impl GridShowcase {
                 publish_saved_edit(&address, &raw);
                 publish_active_edit(0);
                 self.feedback = Some(format!("Saved row {} · {}", address.row_id, address.column_key));
+                *self.inline_editor.borrow_mut() = None;
                 self.editor = None;
                 self._input_subscription = None;
             }
@@ -242,8 +244,41 @@ impl GridShowcase {
         cx.notify();
     }
 
+    /// Capture editor keys before GPUI's built-in table navigation consumes them.
+    /// Escape cancels; Tab commits and advances to the next editable visible cell.
+    fn on_grid_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if event.is_held { return; }
+        let key = event.keystroke.key.to_ascii_lowercase();
+        match key.as_str() {
+            "f2" if self.editor.is_none() => {
+                self.begin_selected_edit(window, cx);
+                cx.stop_propagation();
+            }
+            "escape" | "esc" if self.editor.is_some() => {
+                self.cancel_edit(cx);
+                cx.stop_propagation();
+            }
+            "tab" if self.editor.is_some() => {
+                let address = self.editor.as_ref().expect("editing").address.clone();
+                let backwards = event.keystroke.modifiers.shift;
+                self.commit_edit(cx);
+                // An invalid edit must retain focus and the error; no navigation.
+                if self.editor.is_none() {
+                    let next = self.table.read(cx).delegate().next_editable_cell(&address, backwards);
+                    if let Some(info) = next {
+                        self.selected = Some(info.address.clone());
+                        self.start_edit(info, window, cx);
+                    }
+                }
+                cx.stop_propagation();
+            }
+            _ => {}
+        }
+    }
+
     fn cancel_edit(&mut self, cx: &mut Context<Self>) {
         publish_active_edit(0);
+        *self.inline_editor.borrow_mut() = None;
         self.editor = None;
         self._input_subscription = None;
         self.feedback = Some("Edit canceled".into());
@@ -256,6 +291,7 @@ impl Render for GridShowcase {
         let only_completed = self.table.clone();
         let show_all = self.table.clone();
         let mut content = div().size_full().flex().flex_col().bg(rgb(0xf7f9fc))
+            .capture_key_down(cx.listener(Self::on_grid_key_down))
             .child(
                 div().flex().items_center().justify_between()
                     .px_6().py_4().bg(rgb(0xffffff))
@@ -263,7 +299,7 @@ impl Render for GridShowcase {
                     .child(
                         div().flex().flex_col().gap_1()
                             .child(div().text_xl().font_bold().text_color(rgb(0x273550)).child("GPUI Grid"))
-                            .child(div().text_sm().text_color(rgb(0x7d899b)).child("Rust GPUI • WebAssembly + Desktop • Double-click a cell to edit"))
+                            .child(div().text_sm().text_color(rgb(0x7d899b)).child("Rust GPUI • Desktop + WebAssembly • In-cell edit: double-click / F2, Enter / Tab, Esc"))
                     )
                     .child(
                         div().flex().gap_2()
@@ -291,13 +327,13 @@ impl Render for GridShowcase {
 
         if let Some(editor) = &self.editor {
             let heading = format!("Row {} · {}", editor.address.row_id, editor.address.column_key);
-            let input = editor.input.clone();
             let kind = editor.data_type;
             let error = editor.error.clone();
             let mut panel = div().flex().items_center().gap_3().px_4().py_2()
                 .bg(rgb(0xeff3ff)).border_b_1().border_color(rgb(0xdbe3f7))
                 .child(div().text_sm().font_bold().text_color(rgb(0x425578)).child(heading))
-                .child(Input::new(&input).w(px(260.0)).aria_label("Edit grid cell"));
+                .child(div().text_sm().text_color(rgb(0x61718a))
+                    .child("Editing in cell · Enter/Tab save · Esc cancel · no blur auto-commit"));
             if kind == DataType::Boolean {
                 panel = panel
                     .child(Button::new("editor-true").label("True").on_click(cx.listener(|this, _, window, cx| this.set_boolean_input(true, window, cx))))

@@ -5,7 +5,10 @@ const report = (type) => window.parent?.postMessage({ source: 'gpui-grid-wasm', 
 try {
   const wasm = await import('./pkg/gpui_grid_web.js');
   await wasm.default();
-  wasm.run();
+  // A feature route selects a Rust GridShowcase mode. The docs host never
+  // renders or mutates table rows in JavaScript.
+  const feature = new URLSearchParams(window.location.search).get('feature') || 'overview';
+  wasm.run(feature);
   // GPUI's run_embedded initializes graphics asynchronously. Do not advertise success
   // until the GPUI WebPlatform has actually appended its rendering canvas.
   const canvas = await new Promise((resolve, reject) => {

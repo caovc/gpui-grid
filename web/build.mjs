@@ -16,7 +16,7 @@ try {
 }
 await rm(dist,{force:true,recursive:true});
 await mkdir(join(dist,'viewer','pkg'),{recursive:true});
-for (const file of ['index.html','styles.css','shell.js']) await copyFile(join(root,file),join(dist,file));
+for (const file of ['index.html','styles.css','shell.js','catalog.js']) await copyFile(join(root,file),join(dist,file));
 for (const file of ['index.html','loader.js']) await copyFile(join(root,'viewer',file),join(dist,'viewer',file));
 await copyFile(js,join(dist,'viewer','pkg','gpui_grid_web.js'));
 await copyFile(wasm,join(dist,'viewer','pkg','gpui_grid_web_bg.wasm'));

@@ -1,32 +1,121 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<meta name="description" content="Live GPUI Grid component preview: the very same Rust/GPUI view compiled to WebAssembly for the browser." />
-<title>GPUI Grid · Rust / WebAssembly Component Lab</title>
-<link rel="stylesheet" href="./styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="GPUI Grid — Rust 原生表格组件文档。按特性浏览真正由 GPUI WebPlatform 编译为 WebAssembly 的在线示例。">
+  <meta name="theme-color" content="#f9fbfc">
+  <title>GPUI Grid · Rust / GPUI 组件文档与交互示例</title>
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<div class="app">
-  <aside class="sidebar">
-    <div class="identity"><span class="mark">▦</span><span>gpui<span class="accent">grid</span><span class="period">.</span></span></div>
-    <div class="caps">COMPONENT WORKSPACE</div>
-    <a class="nav active" href="./"><span class="nav-icon">▦</span>Data Grid <span class="nav-tag">LIVE</span></a>
-    <a class="nav" href="https://github.com/caovc/gpui-grid" target="_blank" rel="noopener"><span class="nav-icon">⌘</span>Source on GitHub <span class="external">↗</span></a>
-    <div class="caps lower">BACKEND</div>
-    <div class="backend"><span class="pulse"></span><div><b>Rust → WASM</b><small>GPUI WebPlatform</small></div></div>
-    <div class="sidebar-note">The component below is rendered by the same <strong>Rust GPUI view</strong> used by the desktop demo. It is not a JavaScript table clone.</div>
-    <div class="sidebar-bottom">GPUI KIT <b>0.7.3</b><span>•</span> PROOF OF CONCEPT</div>
+<div class="site-shell" id="site-shell">
+  <aside class="sidebar" id="sidebar" aria-label="功能文档导航">
+    <a class="brand" href="?feature=overview" aria-label="GPUI Grid 文档首页">
+      <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+      <span class="brand-text">GPUI<span>Grid</span><small>DOCS</small></span>
+    </a>
+    <div class="sidebar-intro">
+      <span class="sidebar-eyebrow">RUST NATIVE COMPONENTS</span>
+      <p>高性能 Data Grid<br>桌面 · WebAssembly</p>
+    </div>
+    <label class="search-field" for="feature-search">
+      <span aria-hidden="true">⌕</span>
+      <input id="feature-search" type="search" placeholder="搜索功能 / Search..." autocomplete="off" aria-label="搜索 Grid 文档">
+      <kbd>⌘ K</kbd>
+    </label>
+    <nav id="feature-nav" class="feature-nav" aria-label="Grid 文档功能分类"></nav>
+    <div class="sidebar-bottom">
+      <div class="sidebar-runtime"><i></i><div><strong>Real GPUI WebAssembly</strong><span>同一套 Rust 桌面 / Web 视图</span></div></div>
+      <div class="sidebar-links"><a href="https://github.com/caovc/gpui-grid" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a href="https://github.com/caovc/gpui-grid/issues" target="_blank" rel="noopener noreferrer">Roadmap ↗</a></div>
+    </div>
   </aside>
-  <main class="content">
-    <header class="topline"><div><span class="breadcrumb">Components</span><span class="chev">›</span><strong>Data Grid</strong></div><div class="topright"><span class="chip">● WASM RUNTIME</span><a href="https://github.com/caovc/gpui-grid/actions" target="_blank" rel="noopener">Build status ↗</a></div></header>
-    <section class="intro"><div><div class="eyebrow">INTERACTIVE COMPONENT SHOWCASE <span class="eyebrow-dot">◆</span> LIVE RUST CANVAS</div><h1>Data Grid<span class="h1dot">.</span></h1><p>AG Grid-inspired data table, built with Rust + GPUI. The canvas below runs the actual GPUI native component compiled to WebAssembly.</p></div><div class="intro-side"><span class="version">v0.1.0 · Experimental Web target</span></div></section>
-    <div class="metrics"><div class="metric"><span class="metric-icon">▦</span><div><strong>12,480</strong><small>Sample rows</small></div></div><div class="metric"><span class="metric-icon purple">⚡</span><div><strong>Native GPUI</strong><small>Shared Rust renderer</small></div></div><div class="metric"><span class="metric-icon cyan">◎</span><div><strong>WebGPU / WebGL2</strong><small>Browser rendering backend</small></div></div><div class="metric"><span class="metric-icon green">✓</span><div><strong>DataTable</strong><small>Virtualized rows &amp; columns</small></div></div></div>
-    <section class="viewer-card"><div class="viewer-toolbar"><div class="viewer-title"><span class="mini-grid">▦</span><strong>Live component</strong><span class="runtime" id="runtime"><i class="status-dot"></i>Initializing WASM…</span></div><div class="viewer-controls"><button id="reload" type="button">↻ &nbsp;Restart</button><a href="./viewer/" target="_blank" rel="noopener">↗ &nbsp;Fullscreen</a></div></div><div class="frame-wrap"><iframe id="gpui-frame" title="Real Rust GPUI data table (WebAssembly)" src="./viewer/" allow="fullscreen"></iframe></div><div class="viewer-footer"><span><i class="green-dot"></i> Actual Rust / GPUI WebAssembly runtime</span><span id="runtime-details">Waiting for WebGPU / WebGL2 initialization…</span></div></section>
-    <div class="footnotes"><span><b>Try it:</b> Sort a header · resize columns · select cells · filter to “Completed” · show all rows</span><span><a href="https://gpui-kit.com/docs/webassembly/" rel="noopener" target="_blank">GPUI WebAssembly docs ↗</a></span></div>
-  </main>
+
+  <div class="main-shell">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu" id="mobile-menu" type="button" aria-label="打开功能目录" aria-controls="sidebar" aria-expanded="false">☰</button>
+        <span class="topbar-product">GPUI Grid</span><span class="topbar-separator">/</span><span class="topbar-section">Documentation</span>
+        <span class="release-tag">v0.2 · Experimental</span>
+      </div>
+      <div class="topbar-right">
+        <span class="topbar-compile"><span class="green-dot"></span> Rust → WASM</span>
+        <button id="theme-toggle" class="icon-button" aria-label="切换深浅主题" title="切换深浅主题" type="button">◐</button>
+        <a href="https://github.com/caovc/gpui-grid" target="_blank" rel="noopener noreferrer" class="topbar-gh">GitHub <span>↗</span></a>
+      </div>
+    </header>
+    <div class="content-layout">
+      <main class="doc-main" id="doc-main">
+        <div class="breadcrumb-bar"><a href="?feature=overview">Docs</a><span>›</span><span id="current-group">Getting Started</span><span>›</span><strong id="breadcrumb-current">Overview</strong></div>
+        <div class="feature-heading">
+          <div class="heading-overline"><span id="feature-category">GETTING STARTED</span><span class="overline-divider">/</span><span id="feature-index">01</span></div>
+          <div class="heading-titleline"><h1 id="feature-title">Data Grid 总览</h1><span id="feature-status" class="feature-status">LIVE DEMO</span></div>
+          <p id="feature-summary" class="feature-summary">同一份 Rust GPUI 表格组件，在原生桌面与浏览器 WebAssembly 中运行。</p>
+          <div class="feature-tags" id="feature-tags"></div>
+        </div>
+        <div class="notice"><span class="notice-icon">◈</span><p><strong>真正的 Rust / GPUI 渲染。</strong>所有 Live 示例均通过 <code>wasm-bindgen</code> 启动 GPUI WebPlatform Canvas。网页只负责文档导航，不包含 JavaScript 表格实现。<a href="https://github.com/caovc/gpui-grid/tree/main/crates/gpui-grid" target="_blank" rel="noopener noreferrer">查看组件源码 ↗</a></p></div>
+
+        <section id="examples" class="doc-section">
+          <div class="section-heading"><div><div class="section-kicker">INTERACTIVE EXAMPLE</div><h2>在线示例 <span class="section-en">/ Live Demo</span></h2></div><p id="demo-context">这些操作直接更新 Rust GridModel。</p></div>
+          <div class="playground-card" id="playground-card">
+            <div class="playground-toolbar">
+              <div class="playground-tabs" role="tablist" aria-label="示例内容">
+                <button class="playground-tab active" id="tab-preview" type="button" role="tab" aria-selected="true" data-view="preview">◫　Live example</button>
+                <button class="playground-tab" id="tab-code" type="button" role="tab" aria-selected="false" data-view="code">⌘　Rust source</button>
+              </div>
+              <div class="playground-actions">
+                <span class="runtime" id="runtime" role="status" aria-live="polite"><i class="status-dot"></i>Initializing WASM…</span>
+                <button id="reload" type="button" class="tool-button" title="重新启动 Rust WASM">↻ <span>重新运行</span></button>
+                <a href="./viewer/" id="open-fullscreen" class="tool-button" target="_blank" rel="noopener noreferrer" title="独立窗口展示真实 GPUI Canvas">⤢ <span>Fullscreen</span></a>
+              </div>
+            </div>
+            <div class="playground-preview" id="preview-panel" role="tabpanel" aria-labelledby="tab-preview">
+              <div class="frame-wrap"><iframe id="gpui-frame" title="真正的 Rust GPUI / WebAssembly Data Grid 示例" src="about:blank" allow="fullscreen" loading="eager"></iframe></div>
+            </div>
+            <div class="playground-code" id="code-panel" role="tabpanel" aria-labelledby="tab-code" hidden>
+              <div class="code-toolbar"><span><i></i> Rust / GPUI · example.rs</span><button class="copy-button" id="copy-code" type="button">⧉ 复制代码</button></div>
+              <pre><code id="rust-example-code"></code></pre>
+            </div>
+            <div class="playground-foot"><span><span class="green-dot"></span> <span id="runtime-details">等待 GPUI WebPlatform 初始化…</span></span><span class="frame-footnote">GPUI 0.7.3 · WebGPU / WebGL2</span></div>
+          </div>
+          <div class="planned-example" id="planned-example" hidden>
+            <div class="planned-icon">◈</div><strong>该功能正在开发中</strong>
+            <p id="planned-description">Rust API 和交互示例尚未完成，本站不会使用模拟数据表格替代真实 GPUI 组件。</p>
+            <a href="https://github.com/caovc/gpui-grid/issues" target="_blank" rel="noopener noreferrer">查看开发任务 →</a>
+          </div>
+          <div class="demo-hints" id="demo-hints"></div>
+        </section>
+
+        <section id="how-it-works" class="doc-section explanation-section">
+          <div class="section-heading"><div><div class="section-kicker">HOW IT WORKS</div><h2>实现方式 <span class="section-en">/ How it works</span></h2></div></div>
+          <p class="body-copy" id="feature-description"></p>
+          <div class="steps" id="feature-steps"></div>
+        </section>
+
+        <section id="api" class="doc-section">
+          <div class="section-heading"><div><div class="section-kicker">RUST INTERFACE</div><h2>核心 API <span class="section-en">/ Reference</span></h2></div><a class="source-link" href="https://github.com/caovc/gpui-grid/tree/main/crates/gpui-grid-core" target="_blank" rel="noopener noreferrer">Source on GitHub ↗</a></div>
+          <div class="api-table-wrap"><table class="api-table"><thead><tr><th>API / Type</th><th>说明</th></tr></thead><tbody id="api-rows"></tbody></table></div>
+        </section>
+
+        <section id="notes" class="doc-section bottom-note">
+          <div class="section-kicker">IMPLEMENTATION STATUS</div><h2>使用说明与限制</h2>
+          <ul id="feature-notes"></ul>
+        </section>
+        <nav class="page-pagination" aria-label="上一个与下一个功能"><a id="prev-page" href="?feature=overview"><small>← 上一篇</small><strong>Overview</strong></a><a id="next-page" href="?feature=sorting"><small>下一篇 →</small><strong>Sorting</strong></a></nav>
+        <footer class="page-footer"><span>Built with Rust + GPUI Kit · Real WebAssembly gallery</span><span>Independent AG Grid-inspired implementation · MIT</span></footer>
+      </main>
+      <aside class="page-toc" aria-label="本页导航">
+        <span class="toc-title">ON THIS PAGE</span>
+        <a href="#examples" class="toc-link active">在线示例</a>
+        <a href="#how-it-works" class="toc-link">实现方式</a>
+        <a href="#api" class="toc-link">API Reference</a>
+        <a href="#notes" class="toc-link">说明与限制</a>
+        <div class="toc-card"><span>◩</span><strong>Shared Rust renderer</strong><p>Docs shell ≠ JS Grid。浏览器实际绘制 GPUI Canvas。</p><a href="https://github.com/caovc/gpui-grid" target="_blank" rel="noopener noreferrer">Browse source ↗</a></div>
+      </aside>
+    </div>
+  </div>
 </div>
+<div class="mobile-overlay" id="mobile-overlay" hidden></div>
 <script type="module" src="./shell.js"></script>
 </body>
 </html>

@@ -20,12 +20,18 @@ One view is used for **desktop native GPUI and the browser's GPUI WebPlatform**.
 | Grouping / aggregation | ✅ | UI not wired | UI not wired |
 | Excel XLSX, Pivot, server-side row model | ❌ | ❌ | ❌ |
 | Browser WebAssembly renderer | n/a | n/a | GPUI WebPlatform + wasm-bindgen |
+| Feature-specific docs examples (sorting, filtering, selection, editing, columns, virtualization) | Shared `GridModel` | ✅ same `GridShowcase` modes | ✅ real WASM mode selected via `run(feature)` |
+| Typed amount filter preset in feature demo | ✅ | ✅ Rust GPUI toolbar | ✅ Rust GPUI toolbar |
+| Column visibility preset in feature demo | ✅ | ✅ Rust GPUI toolbar | ✅ Rust GPUI toolbar |
+| Sorting toolbar (asc/desc/reset) | ✅ | ✅ Rust GPUI toolbar | ✅ Rust GPUI toolbar |
 
 Range selection phase 2 (#5): Shift+arrow keys extend the rectangle from the active GPUI cell; Ctrl/Cmd+A selects all currently visible rows and columns using stable range endpoints rather than allocating one object per selected cell. While a cell is being edited, these shortcuts do not replace the input's normal text editing shortcuts. The same model and keybindings run on desktop and genuine GPUI WASM.
 
 Range selection phase 1 (#5): click a cell to anchor the selection, Shift+click another to extend an inclusive rectangle. The Rust model retains stable row IDs and column keys, computes rectangle coordinates against the current sort/filter/column order, and hides highlighting rather than pointing at the wrong records when an endpoint is filtered out. Selection state drives GPUI cell backgrounds on desktop and in real WASM; drag gestures, multi-row selection and advanced keyboard navigation remain follow-ups.
 
 Editor v2: double-click a visible editable cell or select one and press **F2** / click **Edit cell**; a real Rust GPUI InputState is painted **inside the table cell**. Press Enter to commit; Tab/Shift+Tab commit and move to the next/previous editable cell; Esc or Cancel discard the draft. Save and Boolean controls remain available in the toolbar. Errors keep the editor active. We intentionally **do not auto-commit on blur**, avoiding IME composition loss. Numeric/boolean parsing and readonly enforcement remain in the Rust core. IME and platform-specific keyboard behavior still require broader coverage, so #4 remains open until fully verified.
+
+The [feature documentation website](../web/) uses a separate HTML shell for navigation, API reference, code snippets, and search. **All Live Grid demos run a real Rust GPUI Canvas**. Planned and Core-only pages deliberately show no fake interactive grid. Feature modes are selectable by deep link `?feature=sorting` etc., and their toolbar operations are implemented in Rust. The Virtualization page constructs 50,000 local rows; this is a demonstration, not a performance guarantee.
 
 WASM is **showcase-only**, according to upstream GPUI Kit documentation. Passing `cargo check` is not proof of a running WebGPU/WebGL2 surface: check the browser at the deployed site.
 

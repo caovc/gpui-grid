@@ -10,7 +10,7 @@ use gpui_kit::base::StyledExt as _;
 use gpui_kit::component::{
     button::{Button, ButtonVariants},
     checkbox::Checkbox,
-    Sizable,
+    Disableable as _, Sizable,
     input::{Input, InputState},
     popover::Popover,
     table::TableState,
@@ -26,6 +26,13 @@ pub(crate) type HeaderErrors = Rc<RefCell<HashMap<String, String>>>;
 thread_local! {
     static LAST_HEADER_ACTION: RefCell<String> = const { RefCell::new(String::new()) };
     static OPEN_HEADER_MENU: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+pub(crate) fn record_set_search_enter(key: &str, valid: bool, visible_rows: usize) {
+    record_action(format!(
+        "set-search:{}:{}:{}",
+        key, if valid { "apply" } else { "error" }, visible_rows
+    ));
 }
 
 pub(crate) fn record_enter_filter(column_key: &str, accepted: bool, visible_rows: usize) {
@@ -286,6 +293,7 @@ fn select_all_checkbox(
     let target = table.clone();
     Checkbox::new(format!("grid-set-select-all-{}", key))
         .checked(checked)
+        .disabled(matching.is_empty())
         .label("(Select All)")
         .small()
         .on_change(move |state, _, cx| {

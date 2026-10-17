@@ -352,6 +352,10 @@ impl GridDelegate {
 
     pub fn edit(&mut self, edits: &[gpui_grid_core::Edit]) -> Result<usize, GridError> {
         let count = self.model.apply_edits(edits)?;
+        // Distinct options are cached, but editing can introduce or remove
+        // values. Refresh this cache only on actual data mutations, never on
+        // every header render or scroll frame.
+        if count > 0 { self.header_set_values = Self::build_header_set_values(&self.model); }
         self.rebuild_view();
         Ok(count)
     }
@@ -433,13 +437,33 @@ impl TableDelegate for GridDelegate {
                 input.clone()
             } else {
                 let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search values..."));
+                let option_key = key.clone();
+                let options = set_values.clone().unwrap_or_default();
                 let subscription = cx.subscribe_in(
                     &search, window,
-                    |table, _, event: &InputEvent, _, cx| {
-                        // Query only narrows checkbox candidates; it does not
-                        // mutate filtered rows until a checkbox is toggled.
-                        if matches!(event, InputEvent::Change) {
-                            table.refresh(cx);
+                    move |table, input, event: &InputEvent, _, cx| {
+                        match event {
+                            InputEvent::Change => {
+                                // Mini Filter changes only the displayed
+                                // checkbox list, not the actual filtered data.
+                                table.refresh(cx);
+                            }
+                            InputEvent::PressEnter { .. } => {
+                                // Excel/AG Grid-like shortcut: Enter selects
+                                // all mini-search matches and applies instantly.
+                                let query = input.read(cx).value().to_lowercase();
+                                let values = options.iter()
+                                    .filter(|candidate| candidate.value.text().to_lowercase().contains(&query))
+                                    .map(|candidate| candidate.value.clone())
+                                    .collect::<Vec<_>>();
+                                let result = table.delegate_mut().set_column_values(&option_key, values);
+                                let count = table.delegate().row_count();
+                                header_controls::record_set_search_enter(
+                                    &option_key, result.is_ok(), count
+                                );
+                                table.refresh(cx);
+                            }
+                            _ => {}
                         }
                     },
                 );

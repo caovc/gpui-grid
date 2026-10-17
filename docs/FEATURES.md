@@ -14,13 +14,13 @@ One view is used for **desktop native GPUI and the browser's GPUI WebPlatform**.
 | Quick filter (Completed / All) | ✅ | ✅ | ✅ |
 | Complex typed filters | ✅ | API only | API only |
 | Multi-column sort | ✅ | API only | API only |
-| Typed edit transactions | ✅ | ✅ via GPUI editor panel (phase 1) | ✅ via same GPUI editor panel (GPU dependent) |
+| Typed edit transactions | ✅ | ✅ GPUI in-cell InputState (phase 2) | ✅ shared GPUI in-cell InputState (GPU dependent) |
 | CSV export | ✅ | API only | API only |
 | Grouping / aggregation | ✅ | UI not wired | UI not wired |
 | Excel XLSX, Pivot, server-side row model | ❌ | ❌ | ❌ |
 | Browser WebAssembly renderer | n/a | n/a | GPUI WebPlatform + wasm-bindgen |
 
-Editor v1: double-click a visible editable cell or select it and click **Edit cell**; the real GPUI InputState opens above the table. Press Enter or click Save to validate and persist by stable row ID; Cancel leaves the value unchanged. Text, finite numbers, null numeric inputs and boolean true/false are supported. The next editor iteration will add in-cell overlays, F2/Escape/Tab/blur configuration and cross-browser IME checks, so Issue #4 remains open until those are validated.
+Editor v2: double-click a visible editable cell or select one and press **F2** / click **Edit cell**; a real Rust GPUI InputState is painted **inside the table cell**. Press Enter to commit; Tab/Shift+Tab commit and move to the next/previous editable cell; Esc or Cancel discard the draft. Save and Boolean controls remain available in the toolbar. Errors keep the editor active. We intentionally **do not auto-commit on blur**, avoiding IME composition loss. Numeric/boolean parsing and readonly enforcement remain in the Rust core. IME and platform-specific keyboard behavior still require broader coverage, so #4 remains open until fully verified.
 
 WASM is **showcase-only**, according to upstream GPUI Kit documentation. Passing `cargo check` is not proof of a running WebGPU/WebGL2 surface: check the browser at the deployed site.
 

@@ -8,6 +8,8 @@
 //! This is the first native component milestone. The browser showcase additionally
 //! demonstrates controls that are not yet available in this native adapter.
 use gpui_grid_core::{GridError, GridModel, Sort, Value};
+use std::{cell::RefCell, rc::Rc};
+use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::*;
 use gpui_kit::component::table::{
     Column as UiColumn, ColumnSort, TableDelegate, TableState,
@@ -27,6 +29,15 @@ pub struct CellInfo {
     pub value: Value,
 }
 
+/// The editor is a real GPUI InputState rendered inside a virtualized cell.
+/// This shared slot avoids reentering TableState while it emits double-click events.
+#[derive(Clone)]
+pub(crate) struct InlineEditor {
+    pub address: CellAddress,
+    pub input: Entity<InputState>,
+}
+pub(crate) type InlineEditorSlot = Rc<RefCell<Option<InlineEditor>>>;
+
 /// Use `cx.new(|cx| TableState::new(GridDelegate::new(model), window, cx))`
 /// to instantiate the GPUI state. `DataTable::new(&entity)` performs native
 /// row/column virtualization and keyboard interaction.
@@ -34,6 +45,7 @@ pub struct GridDelegate {
     pub model: GridModel,
     presentation: Vec<UiColumn>,
     visible: Vec<usize>,
+    inline_editor: InlineEditorSlot,
 }
 
 impl GridDelegate {
@@ -50,7 +62,41 @@ impl GridDelegate {
             if state.pin == PinSide::Left { base.fixed_left() } else { base }
         }).collect();
         let visible = model.view();
-        Self { model, presentation, visible }
+        Self { model, presentation, visible, inline_editor: Rc::new(RefCell::new(None)) }
+    }
+
+    pub(crate) fn inline_editor_slot(&self) -> InlineEditorSlot { self.inline_editor.clone() }
+
+    /// Find a currently visible cell using stable identities rather than viewport offsets.
+    pub fn cell_info_by_address(&self, address: &CellAddress) -> Option<CellInfo> {
+        let row_ix = self.visible.iter().position(|&ix| {
+            self.model.row(ix).is_some_and(|row| row.id == address.row_id)
+        })?;
+        let col_ix = self.presentation.iter().position(|col| col.key.to_string() == address.column_key)?;
+        self.cell_info(row_ix, col_ix)
+    }
+
+    /// Tab navigation follows displayed columns and skips readonly cells.
+    pub fn next_editable_cell(&self, address: &CellAddress, backwards: bool) -> Option<CellInfo> {
+        let cols = self.presentation.len();
+        let total = cols.checked_mul(self.visible.len())?;
+        if total < 2 { return None; }
+        let row_ix = self.visible.iter().position(|&ix| {
+            self.model.row(ix).is_some_and(|row| row.id == address.row_id)
+        })?;
+        let col_ix = self.presentation.iter().position(|col| col.key.to_string() == address.column_key)?;
+        let start = row_ix * cols + col_ix;
+        for distance in 1..total {
+            let next = if backwards {
+                (start + total - distance) % total
+            } else {
+                (start + distance) % total
+            };
+            if let Some(info) = self.cell_info(next / cols, next % cols) {
+                if info.editable { return Some(info); }
+            }
+        }
+        None
     }
 
     pub fn row_count(&self) -> usize { self.visible.len() }
@@ -124,6 +170,24 @@ impl TableDelegate for GridDelegate {
         _window: &mut Window, _cx: &mut Context<'_, TableState<Self>>,
     ) -> impl IntoElement {
         let key = self.presentation[col_ix].key.to_string();
+        // GPUI paints the actual editor in the visible cell; JS owns no table data.
+        let inline_input = self.inline_editor.borrow().as_ref().and_then(|editor| {
+            let row_id = self.visible.get(row_ix)
+                .and_then(|&index| self.model.row(index))
+                .map(|row| row.id)?;
+            (editor.address.row_id == row_id && editor.address.column_key == key)
+                .then(|| editor.input.clone())
+        });
+        if let Some(input) = inline_input {
+            return div()
+                // A closer GPUI key context overrides DataTable's and Root's
+                // built-in Tab navigation only while this editor is mounted.
+                .key_context("GPUIGridInlineEditor")
+                .w_full().h_full().flex().items_center()
+                .bg(rgb(0xf3f6ff)).border_2().border_color(rgb(0x5269e9))
+                .child(Input::new(&input).appearance(false).bordered(false).flex_1())
+                .into_any_element();
+        }
         let value = self.visible.get(row_ix)
             .and_then(|&index| self.model.value(index, &key))
             .cloned().unwrap_or(Value::Empty);

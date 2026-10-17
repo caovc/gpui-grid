@@ -204,12 +204,14 @@ fn hide_column_button(key: &str, table: &Entity<TableState<GridDelegate>>) -> Bu
         .label("Hide column")
         .outline().xsmall()
         .on_click(move |_, _, cx: &mut App| {
-            target.update(cx, |state, cx| {
-                if state.delegate_mut().set_column_visibility(&key, false).is_ok() {
-                    state.refresh(cx);
-                }
+            let result = target.update(cx, |state, cx| {
+                let result = state.delegate_mut().set_column_visibility(&key, false);
+                if result.is_ok() { state.refresh(cx); }
+                result.map(|_| state.delegate().displayed_columns_count())
             });
-            record_action(format!("column-hide:{}", key));
+            if let Ok(count) = result {
+                record_action(format!("column-hide:{}:{}", key, count));
+            }
             cx.stop_propagation();
         })
 }
@@ -221,12 +223,14 @@ fn show_columns_button(key: &str, table: &Entity<TableState<GridDelegate>>) -> B
         .label("Show all columns")
         .outline().xsmall()
         .on_click(move |_, _, cx: &mut App| {
-            target.update(cx, |state, cx| {
-                if state.delegate_mut().show_all_columns().is_ok() {
-                    state.refresh(cx);
-                }
+            let result = target.update(cx, |state, cx| {
+                let result = state.delegate_mut().show_all_columns();
+                if result.is_ok() { state.refresh(cx); }
+                result.map(|_| state.delegate().displayed_columns_count())
             });
-            record_action("columns-show-all");
+            if let Ok(count) = result {
+                record_action(format!("columns-show-all:{}", count));
+            }
             cx.stop_propagation();
         })
 }
@@ -256,11 +260,13 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
                 .tooltip(format!("{}: sort, filter and columns", title))
         )
         .content(move |_, _, cx| {
-            let mut pane = div().w(px(282.)).flex().flex_col().gap_2().text_sm()
+            // Keep all essential actions visible even in a short embedded
+            // GPUI WebPlatform canvas. Header sort and column visibility live
+            // ABOVE the filter editor rather than below a potentially clipped
+            // popover surface.
+            let mut pane = div().w(px(282.)).flex().flex_col().gap_1().text_sm()
                 .child(div().font_bold().text_color(rgb(0x263854))
                     .child(format!("Column · {}", spec.name)))
-                .child(div().text_xs().text_color(rgb(0x6c7f92))
-                    .child("Rust / GPUI column controls"))
                 .child(div().flex().flex_wrap().gap_1()
                     .child(sort_button(&spec.key, &spec.table, SortCommand::Asc))
                     .child(sort_button(&spec.key, &spec.table, SortCommand::Desc))
@@ -268,7 +274,10 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
                 .child(div().flex().gap_1()
                     .child(sort_button(&spec.key, &spec.table, SortCommand::AppendAsc))
                     .child(sort_button(&spec.key, &spec.table, SortCommand::AppendDesc)))
-                .child(div().border_t_1().border_color(rgb(0xe3e8ef)).pt_2()
+                .child(div().flex().gap_1()
+                    .child(hide_column_button(&spec.key, &spec.table))
+                    .child(show_columns_button(&spec.key, &spec.table)))
+                .child(div().border_t_1().border_color(rgb(0xe3e8ef)).pt_1()
                     .font_bold().text_color(rgb(0x344b63))
                     .child("Filter this column"));
             if spec.data_type != DataType::Boolean {
@@ -313,11 +322,7 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
                         FilterOp::Equals, "False", "bool-false", Some("false"),
                     )));
             }
-            pane = pane.child(clear_filter_button(&spec.key, &spec.table, &spec.errors))
-                .child(div().border_t_1().border_color(rgb(0xe3e8ef)).pt_2()
-                    .child(div().flex().gap_1()
-                        .child(hide_column_button(&spec.key, &spec.table))
-                        .child(show_columns_button(&spec.key, &spec.table))));
+            pane = pane.child(clear_filter_button(&spec.key, &spec.table, &spec.errors));
             if let Some(error) = spec.errors.borrow().get(&spec.key).cloned() {
                 pane = pane.child(div().text_xs().text_color(rgb(0xbb3551)).child(error));
             }

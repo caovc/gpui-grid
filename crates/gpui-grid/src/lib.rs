@@ -541,6 +541,18 @@ impl TableDelegate for GridDelegate {
                     Value::Number(n) => format!("${n:.2}"),
                     _ => label,
                 })).into_any_element(),
+            "growth" => {
+                let color = match &value {
+                    Value::Number(n) if *n > 0.0 => 0x16815a,
+                    Value::Number(n) if *n < 0.0 => 0xae4d4d,
+                    _ => quartz::QUARTZ_LIGHT.foreground,
+                };
+                base.justify_end().text_color(rgb(color))
+                    .child(SharedString::from(match value {
+                        Value::Number(n) => format!("{n:+.1}%"),
+                        _ => label,
+                    })).into_any_element()
+            }
             _ if is_num => base.justify_end()
                 .child(SharedString::from(label)).into_any_element(),
             _ => base.child(SharedString::from(label)).into_any_element(),

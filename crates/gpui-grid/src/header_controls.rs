@@ -10,6 +10,7 @@ use gpui_kit::base::StyledExt as _;
 use gpui_kit::component::{
     button::{Button, ButtonVariants},
     checkbox::Checkbox,
+    scroll::ScrollableElement as _,
     Disableable as _, Sizable,
     input::{Input, InputState},
     popover::Popover,
@@ -437,7 +438,8 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
                     .child(Input::new(search)
                         .aria_label(format!("Search {} values", spec.name))
                         .w_full())
-                    .child(div().max_h(px(180.0)).overflow_y_scroll()
+                    .child(div().id(format!("grid-set-options:{}", spec.key))
+                        .max_h(px(180.0)).overflow_y_scrollbar()
                         .child(entries));
             }
             if let Some(error) = spec.errors.borrow().get(&spec.key).cloned() {

@@ -69,13 +69,22 @@ test('native header Popover exposes real Rust sort and column-hide controls', as
     };
   });
   const canvas = page.frameLocator('#gpui-frame').locator('body > canvas');
+  async function openCustomerMenu() {
+    // Header label, sort badge and ⋯ trigger share a narrow header cell.
+    // Use the same proven coordinate tolerance as the typed-input test;
+    // every interaction remains a real pointer event against GPUI Canvas.
+    for (const [x, y] of [[352, 125], [360, 125], [342, 125], [354, 120], [352, 130]]) {
+      await canvas.click({position: {x, y}});
+      if ((await diag()).menu === 'customer') break;
+    }
+    await expect.poll(async () => (await diag()).menu, {timeout: 10_000}).toBe('customer');
+  }
 
   // Open a real GPUI header menu, sort from it, and inspect Rust's action.
   await page.goto('/?feature=overview', {waitUntil: 'domcontentloaded'});
   await expect(page.locator('#runtime')).toContainText('GPUI WASM initialized', {timeout: 100_000});
   await expect(canvas).toBeVisible();
-  await canvas.click({position: {x: 352, y: 125}});
-  await expect.poll(async () => (await diag()).menu).toBe('customer');
+  await openCustomerMenu();
   // The compact menu puts the Descending button in its first actions row.
   await canvas.click({position: {x: 484, y: 190}});
   await expect.poll(async () => (await diag()).action, {
@@ -88,8 +97,7 @@ test('native header Popover exposes real Rust sort and column-hide controls', as
   await page.reload({waitUntil: 'domcontentloaded'});
   await expect(page.locator('#runtime')).toContainText('GPUI WASM initialized', {timeout: 100_000});
   await expect(canvas).toBeVisible();
-  await canvas.click({position: {x: 352, y: 125}});
-  await expect.poll(async () => (await diag()).menu).toBe('customer');
+  await openCustomerMenu();
   await canvas.click({position: {x: 405, y: 241}});
   await expect.poll(async () => (await diag()).action, {
     timeout: 15_000, message: 'Hide column from native GPUI menu must update Rust column state',

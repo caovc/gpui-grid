@@ -120,6 +120,12 @@ impl<'a> GridApi<'a> {
     pub fn upsert_column_filter(&mut self, filter: Filter) -> Result<(), GridError> {
         self.model.upsert_column_filter(filter)
     }
+    pub fn set_column_values(&mut self, key: &str, values: Vec<super::Value>) -> Result<(), GridError> {
+        self.model.set_column_values(key, values)
+    }
+    pub fn toggle_column_value(&mut self, key: &str, value: super::Value) -> Result<(), GridError> {
+        self.model.toggle_column_value(key, value)
+    }
     pub fn clear_column_filter(&mut self, key: &str) -> Result<(), GridError> {
         self.model.clear_column_filter(key)
     }

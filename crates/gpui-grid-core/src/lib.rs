@@ -82,9 +82,25 @@ impl Sort {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum FilterOp { Contains, Equals, GreaterThan, LessThan }
+pub enum FilterOp {
+    Contains, Equals, GreaterThan, LessThan,
+    /// Inclusive OR within one column; different columns remain AND.
+    /// Filter::value is deliberately Value::Empty for this variant.
+    OneOf(Vec<Value>),
+}
 #[derive(Clone, Debug, PartialEq)]
 pub struct Filter { pub column: String, pub op: FilterOp, pub value: Value }
+impl Filter {
+    /// A checked set of typed values for a categorical column. Rust Core
+    /// validates the schema and that this list is nonempty before persisting.
+    pub fn one_of(column: impl Into<String>, values: Vec<Value>) -> Self {
+        Self { column: column.into(), op: FilterOp::OneOf(values), value: Value::Empty }
+    }
+}
+
+/// One categorical option together with its frequency in raw rows.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DistinctValue { pub value: Value, pub count: usize }
 #[derive(Clone, Debug, PartialEq)]
 pub struct Edit { pub row_id: u64, pub column: String, pub value: Value }
 
@@ -159,8 +175,45 @@ impl GridModel {
             self.pending_events.push(GridEvent::QuickFilterChanged(next));
         }
     }
+    /// All filter models are validated before touching GridState; invalid
+    /// column/type/value combinations never leave a half-applied view.
+    fn validate_filter(&self, filter: &Filter) -> Result<(), GridError> {
+        let col_ix = self.column_index(&filter.column)
+            .ok_or_else(|| GridError::UnknownColumn(filter.column.clone()))?;
+        let schema = self.columns[col_ix].data_type;
+        let typed = |value: &Value| -> bool {
+            match (schema, value) {
+                (DataType::Text, Value::Text(_)) |
+                (DataType::Number, Value::Empty) |
+                (DataType::Text, Value::Empty) |
+                (DataType::Boolean, Value::Empty) |
+                (DataType::Boolean, Value::Boolean(_)) => true,
+                (DataType::Number, Value::Number(n)) => n.is_finite(),
+                _ => false,
+            }
+        };
+        let valid = match (&filter.op, &filter.value) {
+            (FilterOp::Contains, Value::Text(_)) => schema == DataType::Text,
+            (FilterOp::Equals, value) => typed(value),
+            (FilterOp::GreaterThan | FilterOp::LessThan, Value::Number(n)) =>
+                schema == DataType::Number && n.is_finite(),
+            (FilterOp::OneOf(values), Value::Empty) => {
+                // An empty selection matches no rows. It is not equivalent
+                // to clearing the filter, which intentionally matches all.
+                values.iter().all(typed)
+                    && !values.iter().enumerate().any(|(i, v)| values[..i].contains(v))
+            },
+            _ => false,
+        };
+        if valid { Ok(()) } else {
+            Err(GridError::InvalidValue(format!(
+                "invalid filter model for column {}", filter.column
+            )))
+        }
+    }
+
     pub fn set_filters(&mut self, filters: Vec<Filter>) -> Result<(), GridError> {
-        for f in &filters { if self.column_index(&f.column).is_none() {return Err(GridError::UnknownColumn(f.column.clone()));} }
+        for filter in &filters { self.validate_filter(filter)?; }
         if self.state.filters != filters {
             self.state.filters = filters.clone();
             self.pending_events.push(GridEvent::FiltersChanged(filters));
@@ -171,30 +224,70 @@ impl GridModel {
     /// filter conditions. Delegates should call this for a header filter menu,
     /// not `set_filters(vec![...])` which would wipe unrelated filters.
     pub fn upsert_column_filter(&mut self, filter: Filter) -> Result<(), GridError> {
-        let Some(ix) = self.column_index(&filter.column) else {
-            return Err(GridError::UnknownColumn(filter.column));
-        };
-        let schema = self.columns[ix].data_type;
-        let valid = match (&filter.op, &filter.value, schema) {
-            (FilterOp::Contains, Value::Text(_), DataType::Text) => true,
-            (FilterOp::Equals, Value::Text(_), DataType::Text) => true,
-            (FilterOp::Equals, Value::Number(n), DataType::Number) => n.is_finite(),
-            (FilterOp::Equals, Value::Boolean(_), DataType::Boolean) => true,
-            (FilterOp::Equals, Value::Empty, _) => true,
-            (FilterOp::GreaterThan | FilterOp::LessThan, Value::Number(n), DataType::Number) => n.is_finite(),
-            _ => false,
-        };
-        if !valid {
-            return Err(GridError::InvalidValue(format!(
-                "incompatible filter value/operator for column {}",
-                filter.column
-            )));
-        }
+        self.validate_filter(&filter)?;
         let mut next: Vec<Filter> = self.state.filters.iter()
             .filter(|candidate| candidate.column != filter.column)
             .cloned().collect();
         next.push(filter);
         self.set_filters(next)
+    }
+
+    /// Set Filter semantics: selected values are OR within the column;
+    /// different columns remain AND. Empty means match zero rows, whereas
+    /// clear_column_filter removes the predicate and shows all values.
+    pub fn set_column_values(&mut self, key: &str, values: Vec<Value>) -> Result<(), GridError> {
+        if self.column_index(key).is_none() {
+            return Err(GridError::UnknownColumn(key.into()));
+        }
+        let mut normalized = Vec::with_capacity(values.len());
+        for value in values {
+            if !normalized.contains(&value) { normalized.push(value); }
+        }
+        self.upsert_column_filter(Filter::one_of(key, normalized))
+    }
+
+    /// Toggle a GPUI checkbox using current authoritative state; never trust
+    /// a snapshot from the previous render of the virtualized header.
+    pub fn toggle_column_value(&mut self, key: &str, value: Value) -> Result<(), GridError> {
+        // Validate before changing an existing filter or losing user state.
+        self.validate_filter(&Filter::one_of(key, vec![value.clone()]))?;
+        let mut selected = match self.state.filters.iter().find(|f| f.column == key) {
+            Some(Filter { op: FilterOp::OneOf(current), .. }) => current.clone(),
+            _ => self.distinct_column_values(key, 12)?
+                .ok_or_else(|| GridError::InvalidValue(format!(
+                    "Set Filter supports up to 12 distinct values: {key}"
+                )))?
+                .into_iter().map(|item| item.value).collect(),
+        };
+        if let Some(index) = selected.iter().position(|v| v == &value) {
+            selected.remove(index);
+        } else {
+            selected.push(value);
+        }
+        self.set_column_values(key, selected)
+    }
+
+    /// Distinct raw categorical values with counts, bounded to avoid enormous
+    /// header menus. Returns None if the cardinality exceeds max_unique;
+    /// callers cache results, never scanning 100k rows in render_th.
+    pub fn distinct_column_values(
+        &self, key: &str, max_unique: usize,
+    ) -> Result<Option<Vec<DistinctValue>>, GridError> {
+        let column = self.column_index(key)
+            .ok_or_else(|| GridError::UnknownColumn(key.to_owned()))?;
+        if max_unique == 0 { return Ok(None); }
+        let mut result: Vec<DistinctValue> = Vec::new();
+        for row in &self.rows {
+            let value = &row.cells[column];
+            if let Some(item) = result.iter_mut().find(|item| &item.value == value) {
+                item.count += 1;
+            } else {
+                if result.len() == max_unique { return Ok(None); }
+                result.push(DistinctValue { value: value.clone(), count: 1 });
+            }
+        }
+        result.sort_by(|a, b| a.value.text().to_lowercase().cmp(&b.value.text().to_lowercase()));
+        Ok(Some(result))
     }
 
     /// Clear only one column's condition. Unknown columns fail rather than
@@ -270,11 +363,12 @@ impl GridModel {
             if !quick.is_empty() && !row.cells.iter().any(|cell|cell.contains_case_insensitive(&quick)) {return false;}
             selected.iter().all(|(col,filter)| {
                 let cell=&row.cells[*col];
-                match filter.op {
+                match &filter.op {
                     FilterOp::Contains => cell.contains_case_insensitive(&filter.value.text()),
                     FilterOp::Equals => cell==&filter.value,
                     FilterOp::GreaterThan => matches!((cell.as_number(),filter.value.as_number()),(Some(a),Some(b)) if a>b),
                     FilterOp::LessThan => matches!((cell.as_number(),filter.value.as_number()),(Some(a),Some(b)) if a<b),
+                    FilterOp::OneOf(values) => values.contains(cell),
                 }
             })
         }).collect::<Vec<_>>();
@@ -451,6 +545,86 @@ mod tests {
             column: "sum".into(), op: FilterOp::GreaterThan, value: Value::Number(15.0)
         }).unwrap();
         assert_eq!(m.view(), vec![1]);
+    }
+
+    #[test]
+    fn set_filter_uses_or_within_one_column_and_and_across_columns() {
+        let mut model = sample_orders(400);
+        model.set_column_values("status", vec!["Completed".into(), "Pending".into()]).unwrap();
+        let view = model.view();
+        assert!(!view.is_empty() && view.len() < 400);
+        assert!(view.iter().all(|&i| matches!(
+            model.value(i, "status"),
+            Some(Value::Text(s)) if s == "Completed" || s == "Pending"
+        )));
+        model.upsert_column_filter(Filter {
+            column:"amount".into(), op:FilterOp::GreaterThan,
+            value:Value::Number(2_000.0)
+        }).unwrap();
+        assert_eq!(model.state.filters.len(), 2);
+        assert!(model.view().iter().all(|&i|
+            model.value(i,"amount").and_then(Value::as_number).unwrap_or(0.) > 2_000.));
+        model.toggle_column_value("status", "Processing".into()).unwrap();
+        assert_eq!(model.state.filters.len(), 2, "other-column predicate preserved");
+        assert!(matches!(&model.state.filters.iter().find(|f|f.column=="status").unwrap().op,
+            FilterOp::OneOf(v) if v.len() == 3));
+        model.toggle_column_value("status", "Pending".into()).unwrap();
+        assert!(matches!(&model.state.filters.iter().find(|f|f.column=="status").unwrap().op,
+            FilterOp::OneOf(v) if v.len() == 2));
+    }
+
+    #[test]
+    fn set_filter_rejects_bad_types_and_mutations_atomically() {
+        let mut model = sample_orders(30);
+        model.set_column_values("status", vec!["Completed".into()]).unwrap();
+        model.drain_events();
+        let prior = model.state.clone();
+        for bad in [
+            Filter::one_of("status", vec![Value::Number(3.0)]),
+            Filter::one_of("amount", vec![Value::Number(f64::NAN)]),
+            Filter::one_of("status", vec![Value::Text("A".into()), Value::Text("A".into())]),
+        ] {
+            assert!(matches!(model.upsert_column_filter(bad), Err(GridError::InvalidValue(_))));
+            assert_eq!(model.state, prior);
+            assert!(model.drain_events().is_empty());
+        }
+        assert!(matches!(model.toggle_column_value("missing","x".into()), Err(GridError::UnknownColumn(_))));
+        assert_eq!(model.state, prior);
+        model.toggle_column_value("status", "Completed".into()).unwrap();
+        assert_eq!(model.view().len(), 0, "unchecking final value selects none");
+        assert!(matches!(&model.state.filters.iter().find(|f|f.column=="status").unwrap().op,
+            FilterOp::OneOf(v) if v.is_empty()));
+        model.clear_column_filter("status").unwrap();
+        assert_eq!(model.view().len(), 30, "clear restores all values");
+    }
+
+    #[test]
+    fn checkboxes_start_all_checked_and_toggle_excludes_one_value() {
+        let mut model = sample_orders(500);
+        let count = model.view().len();
+        model.toggle_column_value("status", Value::from("Pending")).unwrap();
+        let selected = model.state.filters.iter().find(|f| f.column == "status").unwrap();
+        assert!(matches!(&selected.op, FilterOp::OneOf(v) if v.len()==3));
+        assert!(model.view().len() < count);
+        assert!(model.view().iter().all(|&i| model.value(i, "status") != Some(&Value::from("Pending"))));
+        model.toggle_column_value("status", Value::from("Pending")).unwrap();
+        let selected = model.state.filters.iter().find(|f| f.column == "status").unwrap();
+        assert!(matches!(&selected.op, FilterOp::OneOf(v) if v.len()==4));
+        assert_eq!(model.view().len(), count);
+        assert!(matches!(model.toggle_column_value("order_id", Value::from("ORD-010420")),
+            Err(GridError::InvalidValue(_)), "high-cardinality Set Filter is not available");
+    }
+
+    #[test]
+    fn distinct_values_are_typed_counted_and_bounded() {
+        let model = sample_orders(800);
+        let status = model.distinct_column_values("status", 12).unwrap().unwrap();
+        assert_eq!(status.len(), 4);
+        assert_eq!(status.iter().map(|item|item.count).sum::<usize>(),800);
+        assert!(status.iter().all(|item|matches!(item.value,Value::Text(_))));
+        assert!(model.distinct_column_values("order_id", 12).unwrap().is_none());
+        assert_eq!(model.distinct_column_values("verified", 12).unwrap().unwrap().len(),2);
+        assert!(matches!(model.distinct_column_values("bad_column",12),Err(GridError::UnknownColumn(_))));
     }
 
     #[test] fn base_view(){let m=model();assert_eq!(m.view(),vec![0,1,2]);assert_eq!(m.value(0,"name"),Some(&Value::from("Zoe")));}

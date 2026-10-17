@@ -44,13 +44,13 @@ grid.set_sort(vec![Sort::descending("amount")]).unwrap();
   {
     id:'filtering',group:'features',icon:'⌕',en:'Filtering',title:'数据筛选 Filtering',short:'筛选',
     status:'live',summary:'从 GPUI 表头 ⋯ 打开原生筛选器，输入文字或数值，选择比较运算符或按 Enter 应用条件。',
-    tags:['Typed filter','Quick filter','Stable row IDs'],
-    demoContext:'Revenue 列头 ⋯ 输入 5000 → > Greater；Customer 列头输入 Sophia → Enter，均为真实 Rust 过滤。',
-    hints:['Revenue 列头 ⋯：输入 5000 → > Greater','Customer 列头 ⋯：输入 Sophia → Enter','多个列过滤条件按 AND 组合','Clear this filter：清除当前列条件'],
+    tags:['Typed filter','Set Filter checkboxes','Quartz-style menu','Stable row IDs'],
+    demoContext:'Revenue 列头 ... 输入 5000 → > Greater；在 Company、Region 或 Status 列头 ... 使用 GPUI Set Filter 的复选框。',
+    hints:['Revenue 列头 ...：输入 5000 → > Greater','Company / Region / Status：从列头打开 Set Filter 多选','搜索过滤候选列表；Enter 匹配并应用','Clear this filter：恢复当前列全部值'],
     description:'Rust GridModel 同时维护 filters 和 quick_filter。类型化过滤比较 Value::Number；字符串快捷过滤匹配行内容。多个字段的条件在 Core 中组合，过滤后重新计算可见行索引而不是改变数据存储顺序。',
     steps:['点击真正的 GPUI 表头 ⋯ 输入筛选条件。','按 Enter 或点击运算符应用到 Rust Core。','Clear this filter 只清除此列条件。'],
     api:[['FilterOp::GreaterThan','数值大于条件'],['Filter { column, op, value }','Rust 中带类型的筛选条件'],['GridDelegate::set_filters(Vec<Filter>)','应用 GPUI 表格筛选'],['GridDelegate::set_quick_filter(str)','跨字段文本搜索']],
-    notes:['已支持真实表头筛选；Set Filter、多条件组合仍在 #7 开发。','Quick Filter 目前是 Core API，不再显示顶部演示按钮。','浏览器 JS 不处理行过滤，也不持有数据数组。'],
+    notes:['Set Filter 目前限制为最多 12 种离散值，支持即时多选；高级条件组合仍在 #7 开发。','Quick Filter 目前是 Core API，不再显示顶部演示按钮。','浏览器 JS 不处理行过滤，也不持有数据数组。'],
     code:`use gpui_grid::{
     GridDelegate, Filter, FilterOp, Value, sample_orders
 };

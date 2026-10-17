@@ -16,6 +16,7 @@ use gpui_kit::component::table::{
     Column as UiColumn, ColumnSort, TableDelegate, TableState,
 };
 mod header_controls;
+pub mod quartz;
 use header_controls::{HeaderErrors, HeaderSpec, column_header};
 /// Browser-only, read-only verification of actual GPUI header-menu operations.
 #[cfg(target_family = "wasm")]
@@ -506,7 +507,8 @@ impl TableDelegate for GridDelegate {
                 // built-in Tab navigation only while this editor is mounted.
                 .key_context("GPUIGridInlineEditor")
                 .w_full().h_full().flex().items_center()
-                .bg(rgb(0xf3f6ff)).border_2().border_color(rgb(0x5269e9))
+                .bg(rgb(quartz::QUARTZ_LIGHT.editor_background))
+                .border_2().border_color(rgb(quartz::QUARTZ_LIGHT.editor_border))
                 .child(Input::new(&input).appearance(false).bordered(false).flex_1())
                 .into_any_element();
         }
@@ -517,9 +519,11 @@ impl TableDelegate for GridDelegate {
         let is_num = matches!(&value, Value::Number(_));
         let label = value.text();
         let base = div().flex().items_center().h_full().px_3().w_full()
-            .when(in_range, |element| element.bg(rgb(0xe4efff)));
+            .text_sm().text_color(rgb(quartz::QUARTZ_LIGHT.foreground))
+            .when(in_range, |element|
+                element.bg(rgb(quartz::QUARTZ_LIGHT.selected_background)));
         match key.as_str() {
-            "order_id" => base.text_color(rgb(0x5269e9))
+            "order_id" => base.text_color(rgb(quartz::QUARTZ_LIGHT.accent))
                 .child(SharedString::from(label)).into_any_element(),
             "status" => {
                 let (background, foreground) = match label.as_str() {
@@ -532,7 +536,7 @@ impl TableDelegate for GridDelegate {
                     .bg(rgb(background)).text_color(rgb(foreground))
                     .child(SharedString::from(label))).into_any_element()
             }
-            "amount" => base.justify_end().text_color(rgb(0x263854))
+            "amount" => base.justify_end().text_color(rgb(quartz::QUARTZ_LIGHT.foreground))
                 .child(SharedString::from(match value {
                     Value::Number(n) => format!("${n:.2}"),
                     _ => label,

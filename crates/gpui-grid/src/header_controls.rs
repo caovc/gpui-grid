@@ -4,7 +4,7 @@
 //! documentation website or an example-only toolbar. The actions mutate the
 //! authoritative Rust GridModel and refresh the same GPUI DataTable on desktop
 //! and WebAssembly.
-use crate::{DataType, DistinctValue, FilterOp, GridDelegate, Value};
+use crate::{quartz::QUARTZ_LIGHT, DataType, DistinctValue, FilterOp, GridDelegate, Value};
 use gpui_kit::*;
 use gpui_kit::base::StyledExt as _;
 use gpui_kit::component::{
@@ -346,7 +346,8 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
             // GPUI WebPlatform canvas. Header sort and column visibility live
             // ABOVE the filter editor rather than below a potentially clipped
             // popover surface.
-            let mut pane = div().w(px(282.)).flex().flex_col().gap_1().text_sm()
+            let mut pane = div().w(px(292.)).flex().flex_col().gap_1().text_sm()
+                .bg(rgb(QUARTZ_LIGHT.surface)).text_color(rgb(QUARTZ_LIGHT.foreground))
                 .child(div().font_bold().text_color(rgb(0x263854))
                     .child(format!("Column · {}", spec.name)))
                 .child(div().flex().flex_wrap().gap_1()
@@ -426,7 +427,7 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
                         .child(set_option_checkbox(
                             &spec.key, &spec.table, &option.value, checked
                         ))
-                        .child(div().text_xs().text_color(rgb(0x8897a9))
+                        .child(div().text_xs().text_color(rgb(QUARTZ_LIGHT.muted))
                             .child(option.count.to_string())));
                 }
                 pane = pane.child(div()
@@ -452,6 +453,8 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
         format!("{}{}", if desc { "↓" } else { "↑" }, priority)
     });
     div().size_full().flex().items_center().justify_between().gap_1()
+        .bg(rgb(QUARTZ_LIGHT.header_background))
+        .text_color(rgb(QUARTZ_LIGHT.foreground))
         .child(
             div().min_w_0().flex_1().flex().items_center().gap_1()
                 .child(name)
@@ -459,7 +462,7 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
                     this.child(div().text_xs().text_color(rgb(0x3468ba)).child(badge))
                 })
                 .when(filter_active, |this| {
-                    this.child(div().text_color(rgb(0x0f9e87)).child("●"))
+                    this.child(div().text_color(rgb(QUARTZ_LIGHT.accent)).child("●"))
                 })
         )
         .child(popover)

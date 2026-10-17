@@ -23,6 +23,7 @@ One view is used for **desktop native GPUI and the browser's GPUI WebPlatform**.
 | Feature-specific docs examples (sorting, filtering, selection, editing, columns, virtualization) | Shared `GridModel` | ✅ same `GridShowcase` modes | ✅ real WASM mode selected via `run(feature)` |
 | In-grid column header menu: asc/desc/multi-sort/clear | ✅ | ✅ GPUI Popover on each header | ✅ same native GPUI header (GPU dependent) |
 | In-grid typed column filter: text contains/equals, numeric >/</=, Boolean | ✅ | ✅ GPUI Popover + InputState | ✅ same native GPUI header (GPU dependent) |
+| In-grid Set Filter (low cardinality): checkboxes, select all, mini-search | ✅ typed OneOf (OR/AND) | 🔄 PR #28, GPUI Checkbox menu | 🔄 pending real WASM E2E |
 | In-grid column hide / restore visibility | ✅ | ✅ GPUI Popover, stable keys | ✅ same native GPUI header (GPU dependent) |
 
 Range selection phase 2 (#5): Shift+arrow keys extend the rectangle from the active GPUI cell; Ctrl/Cmd+A selects all currently visible rows and columns using stable range endpoints rather than allocating one object per selected cell. While a cell is being edited, these shortcuts do not replace the input's normal text editing shortcuts. The same model and keybindings run on desktop and genuine GPUI WASM.

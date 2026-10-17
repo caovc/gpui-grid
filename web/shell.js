@@ -205,7 +205,7 @@ function navigate(feature, historyMethod = 'pushState') {
   }
   renderPage(feature);
   closeMobileMenu();
-  document.querySelector('.doc-main').scrollIntoView({behavior: 'instant', block: 'start'});
+  document.querySelector('.doc-main').scrollIntoView({behavior: 'auto', block: 'start'});
 }
 
 renderNavigation();

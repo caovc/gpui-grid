@@ -20,7 +20,12 @@ use header_controls::{HeaderErrors, HeaderSpec, column_header};
 /// Browser-only, read-only verification of actual GPUI header-menu operations.
 #[cfg(target_family = "wasm")]
 pub mod header_debug {
-    pub use super::header_controls::{preview_last_header_action, preview_open_header_menu};
+    pub fn preview_last_header_action() -> String {
+        super::header_controls::preview_last_header_action()
+    }
+    pub fn preview_open_header_menu() -> String {
+        super::header_controls::preview_open_header_menu()
+    }
 }
 
 pub use gpui_grid_core::{

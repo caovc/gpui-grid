@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import {openCustomerHeaderMenu} from './column-menu.mjs';
 
 const getRustFeature = page => page.frameLocator('#gpui-frame').locator('body')
   .evaluate(async () => (await import('./pkg/gpui_grid_web.js')).preview_feature());
@@ -64,11 +65,7 @@ test('sorting example uses the native GPUI column header instead of showcase too
       };
     });
     await expect.poll(async () => (await snapshot()).feature).toBe('sorting');
-    for (const [x, y] of [[352, 125], [360, 125], [342, 125], [354, 120], [352, 130]]) {
-      await canvas.click({position: {x, y}});
-      if ((await snapshot()).menu === 'customer') break;
-    }
-    await expect.poll(async () => (await snapshot()).menu, {timeout: 15_000}).toBe('customer');
+    await openCustomerHeaderMenu(canvas, snapshot);
     // Descending is a real button inside the GPUI column Popover.
     await canvas.click({position: {x: 484, y: 190}});
     await expect.poll(async () => (await snapshot()).action, {

@@ -254,9 +254,13 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
         // the TableState parent can interpret it as column sorting/dragging.
         .trigger(
             Button::new(trigger_id)
-                .label("⋯")
+                // ASCII label is visible even with subset WASM fonts. A
+                // larger hitbox reduces missed clicks inside the GPUI header.
+                .label("...")
                 .text()
                 .xsmall()
+                .w(px(32.0))
+                .h(px(27.0))
                 .tooltip(format!("{}: sort, filter and columns", title))
         )
         .content(move |_, _, cx| {

@@ -1,5 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {PNG} from 'pngjs';
+import {openCustomerHeaderMenu} from './column-menu.mjs';
 
 /** The Canvas is drawn by Rust/GPUI, not by DOM elements. A screenshot is
  * required: the mere existence of a canvas does not prove a rendered frame. */
@@ -64,13 +65,7 @@ test('actual Rust/GPUI WebAssembly paints and handles real canvas click events',
         action: wasm.preview_last_header_action(),
       };
     });
-    for (const [x, y] of [[352, 125], [360, 125], [342, 125], [354, 120], [352, 130]]) {
-      await canvas.click({position: {x, y}});
-      if ((await readHeader()).menu === 'customer') break;
-    }
-    await expect.poll(async () => (await readHeader()).menu, {
-      timeout: 15_000, message: 'native GPUI Customer column menu opens',
-    }).toBe('customer');
+    await openCustomerHeaderMenu(canvas, readHeader);
     await page.keyboard.insertText('Sophia');
     await page.keyboard.press('Enter');
     await expect.poll(async () => (await readHeader()).action, {

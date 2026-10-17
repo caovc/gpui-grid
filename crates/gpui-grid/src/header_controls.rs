@@ -8,7 +8,8 @@ use crate::{DataType, FilterOp, GridDelegate};
 use gpui_kit::*;
 use gpui_kit::base::StyledExt as _;
 use gpui_kit::component::{
-    button::Button,
+    button::{Button, ButtonVariants},
+    Sizable,
     input::{Input, InputState},
     popover::Popover,
     table::TableState,
@@ -96,8 +97,8 @@ fn sort_button(key: &str, table: &Entity<TableState<GridDelegate>>, command: Sor
         .label(command.label())
         .outline()
         .xsmall()
-        .on_click(move |_, _, cx| {
-            let _ = target.update(cx, |state, cx| {
+        .on_click(move |_, _, cx: &mut App| {
+            let result = target.update(cx, |state, cx| {
                 let result = match command {
                     SortCommand::Asc => state.delegate_mut().sort_from_header_menu(&key, false, false),
                     SortCommand::Desc => state.delegate_mut().sort_from_header_menu(&key, true, false),
@@ -135,7 +136,7 @@ fn filter_button(
         .label(label)
         .outline()
         .xsmall()
-        .on_click(move |_, _, cx| {
+        .on_click(move |_, _, cx: &mut App| {
             let raw = preset.map(str::to_string)
                 .unwrap_or_else(|| input.read(cx).value().to_string());
             let result = target.update(cx, |state, cx| {
@@ -170,7 +171,7 @@ fn clear_filter_button(
     Button::new(format!("grid-filter-clear-{}", key))
         .label("Clear this filter")
         .outline().xsmall()
-        .on_click(move |_, _, cx| {
+        .on_click(move |_, _, cx: &mut App| {
             let result = target.update(cx, |state, cx| {
                 let result = state.delegate_mut().clear_column_filter(&key);
                 if result.is_ok() { state.refresh(cx); }
@@ -193,7 +194,7 @@ fn hide_column_button(key: &str, table: &Entity<TableState<GridDelegate>>) -> Bu
     Button::new(format!("grid-hide-column-{}", key))
         .label("Hide column")
         .outline().xsmall()
-        .on_click(move |_, _, cx| {
+        .on_click(move |_, _, cx: &mut App| {
             target.update(cx, |state, cx| {
                 if state.delegate_mut().set_column_visibility(&key, false).is_ok() {
                     state.refresh(cx);
@@ -210,7 +211,7 @@ fn show_columns_button(key: &str, table: &Entity<TableState<GridDelegate>>) -> B
     Button::new(format!("grid-show-all-columns-{}", key))
         .label("Show all columns")
         .outline().xsmall()
-        .on_click(move |_, _, cx| {
+        .on_click(move |_, _, cx: &mut App| {
             target.update(cx, |state, cx| {
                 if state.delegate_mut().show_all_columns().is_ok() {
                     state.refresh(cx);

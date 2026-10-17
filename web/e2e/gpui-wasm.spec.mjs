@@ -75,7 +75,7 @@ test('actual Rust/GPUI WebAssembly paints and handles real canvas click events',
     await page.keyboard.press('Enter');
     await expect.poll(async () => (await readHeader()).action, {
       timeout: 15_000, message: 'GPUI InputState filter must update Rust GridModel',
-    }).toMatch(/^filter:customer:enter:\\d+$/);
+    }).toMatch(/^filter:customer:enter:\d+$/);
     const filterAction = (await readHeader()).action;
     const filtered = Number(filterAction.split(':').at(-1));
     expect(filtered, 'Rust typed column filter should reduce visible records').toBeGreaterThan(0);

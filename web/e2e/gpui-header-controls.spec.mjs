@@ -87,3 +87,41 @@ test('native header Popover exposes real Rust sort and column-hide controls', as
   await info.attach('header-menu-hide-column.png', {body: await canvas.screenshot(),contentType:'image/png'});
   expect(browserErrors).toEqual([]);
 });
+
+test('native GPUI menu moves a pinned column and unpins/reset presentation using Rust state', async ({page}, info) => {
+  const inspect = () => page.frameLocator('#gpui-frame').locator('body').evaluate(async () => {
+    const wasm = await import('./pkg/gpui_grid_web.js');
+    return {menu:wasm.preview_open_header_menu(), action:wasm.preview_last_header_action()};
+  });
+  await page.goto('/?feature=columns', {waitUntil:'domcontentloaded'});
+  await expect(page.locator('#runtime')).toContainText('GPUI WASM initialized', {timeout:100_000});
+  const canvas = page.frameLocator('#gpui-frame').locator('body > canvas');
+  await expect(canvas).toBeVisible();
+  await openCustomerHeaderMenu(canvas, inspect);
+
+  // New command row is directly below existing Hide/Show buttons.
+  // This click must enter Rust GPUI's move handler; no JS grid operation.
+  await canvas.click({position:{x:411,y:270}});
+  await expect.poll(async () => (await inspect()).action, {
+    timeout:15_000, message:'Move Left should update Rust pinned column order',
+  }).toMatch(/^column-move:customer:left:customer,order_id,/);
+  await info.attach('header-native-move-left.png', {body:await canvas.screenshot(),contentType:'image/png'});
+
+  // A fresh model positions Customer at its original header coordinates.
+  await page.reload({waitUntil:'domcontentloaded'});
+  await expect(page.locator('#runtime')).toContainText('GPUI WASM initialized', {timeout:100_000});
+  await openCustomerHeaderMenu(canvas, inspect);
+  await canvas.click({position:{x:568,y:270}});
+  await expect.poll(async () => (await inspect()).action, {
+    timeout:15_000, message:'Unpin should mutate Core ColumnState',
+  }).toMatch(/^column-pin:customer:none:order_id,customer,/);
+  await info.attach('header-native-unpin.png', {body:await canvas.screenshot(),contentType:'image/png'});
+
+  // Reset is next to Hide/Show and returns the exact default column order.
+  await openCustomerHeaderMenu(canvas, inspect);
+  await canvas.click({position:{x:585,y:241}});
+  await expect.poll(async () => (await inspect()).action, {
+    timeout:15_000, message:'Reset should restore schema column state in Rust',
+  }).toMatch(/^columns-reset:order_id,customer,/);
+  await info.attach('header-native-columns-reset.png', {body:await canvas.screenshot(),contentType:'image/png'});
+});

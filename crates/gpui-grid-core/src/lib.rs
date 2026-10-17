@@ -322,6 +322,71 @@ impl GridModel {
         }
         Ok(())
     }
+    /// Move within the *displayed* columns, keeping hidden columns in the
+    /// persistent state rather than confusing a viewport index with storage
+    /// order. Pinned and unpinned columns may not cross their boundary.
+    pub fn move_visible_column(&mut self, key: &str, to_visible: usize) -> Result<(), GridError> {
+        let column = self.state.column(key)
+            .ok_or_else(|| GridError::UnknownColumn(key.to_owned()))?;
+        if !column.visible {
+            return Err(GridError::InvalidValue(format!("Column {key} is hidden")));
+        }
+        let displayed: Vec<&ColumnState> = self.state.columns.iter()
+            .filter(|column| column.visible).collect();
+        let from = displayed.iter().position(|column| column.key == key)
+            .expect("visible column is present in displayed columns");
+        let to = to_visible.min(displayed.len() - 1);
+        if from == to { return Ok(()); }
+        let target = displayed[to];
+        if column.pin != target.pin {
+            return Err(GridError::InvalidValue(
+                "Cannot move a column across a pinned boundary; pin or unpin it first".into()
+            ));
+        }
+        let target_key = target.key.clone();
+        let destination = self.state.columns.iter()
+            .position(|column| column.key == target_key)
+            .expect("display target is present in column state");
+        self.move_column(key, destination)
+    }
+
+    /// Pin a column to the left edge or unpin it, preserving a contiguous
+    /// left-pinned prefix. GPUI Kit 0.7.3 currently renders left-fixed columns;
+    /// right pinning must not silently appear to work before UI support exists.
+    pub fn set_column_pin(&mut self, key: &str, pin: PinSide) -> Result<(), GridError> {
+        if pin == PinSide::Right {
+            return Err(GridError::InvalidValue(
+                "Right-pinned columns are not yet supported by the GPUI adapter".into()
+            ));
+        }
+        let previous = self.state.column(key)
+            .ok_or_else(|| GridError::UnknownColumn(key.to_owned()))?.pin;
+        if previous == pin { return Ok(()); }
+        let pinned_count = self.state.columns.iter()
+            .filter(|column| column.pin == PinSide::Left).count();
+        let destination = if pin == PinSide::Left {
+            pinned_count
+        } else {
+            pinned_count.saturating_sub(1)
+        };
+        self.move_column(key, destination)?;
+        self.state.columns.iter_mut().find(|column| column.key == key)
+            .expect("column validated before move").pin = pin;
+        self.pending_events.push(GridEvent::ColumnPinChanged { key: key.to_owned(), pin });
+        Ok(())
+    }
+
+    /// Reset the presentation (order, visibility, widths and pins) to schema
+    /// defaults without erasing filters, sorting, edits, focus or selection.
+    pub fn reset_column_state(&mut self) {
+        let defaults: Vec<ColumnState> = self.columns.iter()
+            .map(ColumnState::from_column).collect();
+        if self.state.columns != defaults {
+            self.state.columns = defaults.clone();
+            self.pending_events.push(GridEvent::ColumnStateReset(defaults));
+        }
+    }
+
     pub fn set_column_visible(&mut self, key: &str, visible: bool) -> Result<(), GridError> {
         let column = self.state.columns.iter_mut().find(|col| col.key == key)
             .ok_or_else(|| GridError::UnknownColumn(key.to_owned()))?;

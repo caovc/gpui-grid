@@ -34,7 +34,9 @@ test('Set Filter renders native GPUI checkboxes and changes the Rust data view',
     });
   });
   await expect.poll(async () => (await inspect()).menu).toBe('customer');
-  const points = [[425, 460], [425, 485], [425, 505], [425, 530], [425, 555]];
+  // A native column-action row now sits between visibility and filter;
+  // candidate positions remain Canvas coordinates, never DOM buttons.
+  const points = [[425, 490], [425, 515], [425, 535], [425, 560], [425, 585], [425, 605]];
   for (const [x, y] of points) {
     await canvas.click({position:{x,y}, timeout: 10_000});
     const {last} = await inspect();
@@ -79,7 +81,7 @@ test('Set Filter mini-search uses GPUI InputState and Enter to select matching t
 
   // The mini-search is native GPUI InputState in the opened Customer menu.
   // This is a Canvas click, not a browser DOM input or a JS data filter.
-  await canvas.click({position:{x:440,y:418}});
+  await canvas.click({position:{x:440,y:448}});
   await page.keyboard.insertText('Sophia');
   await page.keyboard.press('Enter');
   await expect.poll(async () => (await inspect()).last, {

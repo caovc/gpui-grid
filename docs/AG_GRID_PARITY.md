@@ -16,7 +16,8 @@ A feature is not complete when its Core API exists. Every row below requires **r
 | Text/Number/Boolean filtering | operator selection, typed input validation, clear one column | Native GPUI InputState + operators |
 | **Set Filter** | mini-search, (Select All), individual checkboxes, count, AND across columns, OR within column | In progress #7; low-cardinality native prototype |
 | Set Filter advanced | virtualized options, data-set refresh, Apply/Reset configuration, blanks, key/value formatting, self-filter-aware counts | Planned #7 |
-| Column Tool Panel | choose/show/hide/reorder/pin/reset, floating side panel | Only column menu hide/show available; #9 |
+| Column header management | left/right move, pin-left/unpin, show/hide/reset, safe hidden-column ordering | Native GPUI header Popover with typed Core events; right pin not yet rendered |
+| Column Tool Panel | searchable choose/show/hide/reorder/pin/reset, floating side panel | Planned #9; header controls are not a side tool panel |
 | Cell editing | inline editor F2/double click, Enter, Esc, Tab, typed validator/IME | Partial; #4 |
 | Selection | selected rect, Shift+click/arrow, Ctrl/Cmd+A | Partial; dragging/autoscroll TODO #5 |
 | Clipboard | TSV copy/paste, batch atomic edit, undo/redo | Planned #6 |
@@ -33,6 +34,12 @@ A feature is not complete when its Core API exists. Every row below requires **r
 - States: hover, active, disabled, pending validation, selected cell/row/range, filtered column and sorted priority must be visually distinct.
 - Every in-grid widget supports mouse, keyboard, logical focus, and remains stable under sort/resize/pin/virtual scroll.
 - Dark Quartz is a future separate palette, not automatically enabled by the HTML docs theme switch.
+
+## Column presentation contract (#9)
+
+The persisted `GridState.columns` stores the full schema-wide order, including hidden columns. `GridModel::move_visible_column(key, target_index)` translates a **visible** index to a state index before mutating, and rejects crossing the pinned/unpinned boundary. The left-pinned set is always kept as a contiguous prefix; `set_column_pin` moves keys across that partition and emits a specific pin event. `reset_column_state` restores schema defaults but retains typed rows, filters, sorts, selection and stable focus.
+
+The header Popover exposes these commands inside actual Rust GPUI `TableDelegate::render_th`, not a demo toolbar. Right pinning, serialized state import/export, a searchable column side panel and full drag/resize persistence remain incomplete. GPUI Kit's `fixed_left()` is used; no right-fixed rendering is claimed.
 
 ## Set Filter contract
 

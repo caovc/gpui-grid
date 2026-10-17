@@ -35,7 +35,7 @@ Only the outer docs website is HTML/JS. It describes capabilities, switches demo
 
 `GridModel` owns `Vec<Row>` and an index of stable `Row.id: u64`, `Column.key: String`, and `GridState`. Row cells follow **storage schema order**; displayed columns have independent state (`visible/width/pin/order`). Typed `Value`: `Text`, `Number`, `Boolean`, `Empty`.
 
-Mutations: `set_sorts`, `set_filters`, `set_quick_filter`, `apply_edits`, `select_cell`, `select_range`, `move_column`, `set_column_visible`, `set_column_width`. Validations emit typed `GridEvent`s; failed atomic edits must not partially write rows.
+Mutations: `set_sorts`, `set_filters`, `set_quick_filter`, `apply_edits`, `select_cell`, `select_range`, `move_column`, `move_visible_column`, `set_column_pin`, `reset_column_state`, `set_column_visible`, `set_column_width`. Validations emit typed `GridEvent`s; failed atomic edits must not partially write rows.
 
 Selection: `CellRange { anchor: CellAddress, focus: CellAddress }`; projection to `SelectionRect` is computed against current visible rows and columns. If an endpoint is filtered/hidden, preserve identity but avoid wrong-cell highlights.
 
@@ -53,7 +53,8 @@ Header cell (GridDelegate::render_th)
               ├─ sort asc/desc/clear (Core Sort + refresh)
               ├─ filter contains/equals or numeric >/</= (Core Filter + refresh)
               ├─ active-filter visual indicator
-              └─ clear filter / hide column
+              ├─ clear filter / hide column
+              └─ move left/right, pin-left/unpin, show all, reset columns
 Data cell (render_td)
   ├─ formatted typed value
   ├─ range selection paint (stable IDs)

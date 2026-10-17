@@ -55,7 +55,7 @@ impl GridFeature {
             Self::Filtering => "Filtering · Use the column header ⋯ menu and GPUI InputState to filter typed values",
             Self::Selection => "Selection · Shift+click or Shift+arrows; select every visible cell",
             Self::Editing => "Editing · Double-click or F2; Enter/Tab save; Esc cancels",
-            Self::Columns => "Columns · Resize, reorder and hide/show from native GPUI header menus",
+            Self::Columns => "Columns · Header ⋯: hide/show, move, pin left/unpin and reset; drag columns to reorder",
             Self::Virtualization => "Virtualization · 50,000 typed Rust rows; only the viewport is drawn",
         }
     }

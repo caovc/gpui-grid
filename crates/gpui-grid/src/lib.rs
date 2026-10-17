@@ -92,6 +92,54 @@ impl GridDelegate {
         Ok(())
     }
 
+    /// Move by a *visible* index, not the full column-state index (which
+    /// includes hidden columns). Pinned boundaries are validated in Core.
+    pub fn move_visible_column(&mut self, key: &str, to_visible: usize) -> Result<(), GridError> {
+        self.model.move_visible_column(key, to_visible)?;
+        self.presentation = Self::presentation_for(&self.model);
+        self.refresh_selection_rect();
+        Ok(())
+    }
+
+    pub fn can_move_column_step(&self, key: &str, direction: isize) -> bool {
+        let Some(from) = self.presentation.iter().position(|column| column.key.as_ref() == key) else {
+            return false;
+        };
+        let to = if direction < 0 { from.checked_sub(1) } else { from.checked_add(1) };
+        let Some(to) = to.filter(|&index| index < self.presentation.len()) else {
+            return false;
+        };
+        let neighbor = self.presentation[to].key.as_ref();
+        self.model.state.column(key).zip(self.model.state.column(neighbor))
+            .is_some_and(|(a, b)| a.pin == b.pin)
+    }
+
+    pub fn move_column_step(&mut self, key: &str, direction: isize) -> Result<(), GridError> {
+        if !self.can_move_column_step(key, direction) {
+            return Err(GridError::InvalidValue(format!(
+                "Cannot move column {key} past the edge or a pinned boundary"
+            )));
+        }
+        let index = self.presentation.iter()
+            .position(|column| column.key.as_ref() == key)
+            .ok_or_else(|| GridError::UnknownColumn(key.to_owned()))?;
+        let to = if direction < 0 { index - 1 } else { index + 1 };
+        self.move_visible_column(key, to)
+    }
+
+    pub fn set_column_pin_left(&mut self, key: &str, pinned: bool) -> Result<(), GridError> {
+        self.model.set_column_pin(key, if pinned { PinSide::Left } else { PinSide::None })?;
+        self.presentation = Self::presentation_for(&self.model);
+        self.refresh_selection_rect();
+        Ok(())
+    }
+
+    pub fn reset_columns(&mut self) {
+        self.model.reset_column_state();
+        self.presentation = Self::presentation_for(&self.model);
+        self.refresh_selection_rect();
+    }
+
     /// Restore every schema column, preserving the existing presentation order.
     pub fn show_all_columns(&mut self) -> Result<(), GridError> {
         let keys: Vec<String> = self.model.state.columns.iter().map(|col| col.key.clone()).collect();
@@ -387,6 +435,9 @@ impl TableDelegate for GridDelegate {
             self.model.column_index(&key).expect("displayed column key is in the schema")
         ].data_type;
         let active = self.model.state.filters.iter().any(|filter| filter.column == key);
+        let pinned_left = self.model.state.column(&key).is_some_and(|col| col.pin == PinSide::Left);
+        let can_move_left = self.can_move_column_step(&key, -1);
+        let can_move_right = self.can_move_column_step(&key, 1);
         let set_values = self.header_set_values.get(&key).cloned();
         let set_selected = self.model.state.filters.iter().find(|f| f.column == key)
             .and_then(|f| match &f.op {
@@ -482,6 +533,7 @@ impl TableDelegate for GridDelegate {
             key,
             name: presentation.name,
             data_type, filter_active: active, sort,
+            pinned_left, can_move_left, can_move_right,
             set_values, set_selected, set_search,
             input, input_focus, table: cx.entity(), errors: self.header_errors.clone(),
         })
@@ -577,12 +629,11 @@ impl TableDelegate for GridDelegate {
         _window: &mut Window, _cx: &mut Context<'_, TableState<Self>>,
     ) {
         if col_ix >= self.presentation.len() || to_ix >= self.presentation.len() { return; }
-        let column=self.presentation.remove(col_ix);
-        self.presentation.insert(to_ix,column);
-        // Keep the authoritative column state in sync with GPUI's drag order.
-        let moved_key = self.presentation[to_ix].key.to_string();
-        let _ = self.model.move_column(&moved_key, to_ix);
-        self.refresh_selection_rect();
+        let moved_key = self.presentation[col_ix].key.to_string();
+        // A dragged *visible* index is not a full state index when another
+        // column is hidden. Reject crossing pinned regions and only rebuild
+        // the presentation after Core accepted the move.
+        let _ = self.move_visible_column(&moved_key, to_ix);
     }
 
     fn cell_text(&self, row_ix: usize, col_ix: usize, _cx: &App) -> String {

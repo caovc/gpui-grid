@@ -4,6 +4,7 @@
 //! caches *presentation* elements only; focus, sort, filter and column order
 //! are keyed by stable row IDs and column keys (never viewport indices).
 use super::{Column, Edit, Filter, GridError, GridModel, Row, Sort};
+use crate::selection::CellRange;
 
 /// Immutable construction options, distinct from runtime [`GridState`].
 #[derive(Clone, Debug)]
@@ -70,6 +71,8 @@ pub struct GridState {
     pub quick_filter: String,
     pub columns: Vec<ColumnState>,
     pub focus: Option<CellAddress>,
+    /// Stable rectangular selection, projected into visible viewport coordinates on demand.
+    pub selection: Option<CellRange>,
 }
 impl GridState {
     pub fn new(columns: &[Column]) -> Self {
@@ -79,6 +82,7 @@ impl GridState {
             quick_filter: String::new(),
             columns: columns.iter().map(ColumnState::from_column).collect(),
             focus: None,
+            selection: None,
         }
     }
     pub fn column(&self, key: &str) -> Option<&ColumnState> {
@@ -100,6 +104,7 @@ pub enum GridEvent {
     ColumnWidthChanged { key: String, width: f32 },
     FocusChanged { previous: Option<CellAddress>, current: Option<CellAddress> },
     CellsEdited(Vec<CellAddress>),
+    SelectionChanged(Option<CellRange>),
 }
 
 /// Small command facade: every mutation runs the same validation as the
@@ -118,6 +123,9 @@ impl<'a> GridApi<'a> {
     pub fn set_column_visible(&mut self, key: &str, visible: bool) -> Result<(), GridError> { self.model.set_column_visible(key, visible) }
     pub fn set_column_width(&mut self, key: &str, width: f32) -> Result<(), GridError> { self.model.set_column_width(key, width) }
     pub fn focus_cell(&mut self, cell: Option<CellAddress>) -> Result<(), GridError> { self.model.focus_cell(cell) }
+    pub fn select_cell(&mut self, cell: Option<CellAddress>, extend: bool) -> Result<(), GridError> {
+        self.model.select_cell(cell, extend)
+    }
     pub fn edit(&mut self, edits: &[Edit]) -> Result<usize, GridError> { self.model.apply_edits(edits) }
     pub fn drain_events(&mut self) -> Vec<GridEvent> { self.model.drain_events() }
 }

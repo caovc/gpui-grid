@@ -11,13 +11,14 @@ use gpui_grid_core::{GridError, GridModel, Sort, Value};
 use std::{cell::RefCell, rc::Rc};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::*;
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::component::table::{
     Column as UiColumn, ColumnSort, TableDelegate, TableState,
 };
 
 pub use gpui_grid_core::{
     CellAddress, Column as GridColumn, ColumnState, DataType, Edit, Filter, FilterOp, parse_cell_value,
-    GridApi, GridEvent, GridOptions, GridState, PinSide, Row, sample_orders,
+    CellRange, SelectionRect, GridApi, GridEvent, GridOptions, GridState, PinSide, Row, sample_orders,
 };
 
 /// Identifies a cell independently of sort order, filters or virtualization.
@@ -45,6 +46,7 @@ pub struct GridDelegate {
     pub model: GridModel,
     presentation: Vec<UiColumn>,
     visible: Vec<usize>,
+    selection_rect: Option<SelectionRect>,
     inline_editor: InlineEditorSlot,
 }
 
@@ -62,7 +64,29 @@ impl GridDelegate {
             if state.pin == PinSide::Left { base.fixed_left() } else { base }
         }).collect();
         let visible = model.view();
-        Self { model, presentation, visible, inline_editor: Rc::new(RefCell::new(None)) }
+        let mut grid = Self {
+            model, presentation, visible, selection_rect: None,
+            inline_editor: Rc::new(RefCell::new(None)),
+        };
+        grid.refresh_selection_rect();
+        grid
+    }
+
+    /// Reproject stable selection after sorting, filtering or column movement.
+    fn refresh_selection_rect(&mut self) {
+        let columns = self.presentation.iter().map(|col| col.key.to_string()).collect::<Vec<_>>();
+        self.selection_rect = self.model.selected_rect(&self.visible, &columns);
+    }
+
+    /// Pointer and keyboard events change the authoritative Rust model.
+    pub fn select_address(&mut self, address: Option<CellAddress>, extend: bool) -> Result<(), GridError> {
+        self.model.select_cell(address, extend)?;
+        self.refresh_selection_rect();
+        Ok(())
+    }
+
+    pub fn selected_cell_count(&self) -> usize {
+        self.selection_rect.map_or(0, |bounds| bounds.cell_count())
     }
 
     pub(crate) fn inline_editor_slot(&self) -> InlineEditorSlot { self.inline_editor.clone() }
@@ -152,7 +176,10 @@ impl GridDelegate {
         Ok(count)
     }
 
-    pub fn rebuild_view(&mut self) { self.visible = self.model.view(); }
+    pub fn rebuild_view(&mut self) {
+        self.visible = self.model.view();
+        self.refresh_selection_rect();
+    }
 
     pub fn visible_row(&self, index: usize) -> Option<&gpui_grid_core::Row> {
         self.visible.get(index).and_then(|&original| self.model.row(original))
@@ -170,6 +197,7 @@ impl TableDelegate for GridDelegate {
         _window: &mut Window, _cx: &mut Context<'_, TableState<Self>>,
     ) -> impl IntoElement {
         let key = self.presentation[col_ix].key.to_string();
+        let in_range = self.selection_rect.is_some_and(|rect| rect.contains(row_ix, col_ix));
         // GPUI paints the actual editor in the visible cell; JS owns no table data.
         let inline_input = self.inline_editor.borrow().as_ref().and_then(|editor| {
             let row_id = self.visible.get(row_ix)
@@ -194,7 +222,8 @@ impl TableDelegate for GridDelegate {
         // Data stays typed until the last moment, avoiding lexicographic money sort.
         let is_num = matches!(&value, Value::Number(_));
         let label = value.text();
-        let base = div().flex().items_center().h_full().px_3().w_full();
+        let base = div().flex().items_center().h_full().px_3().w_full()
+            .when(in_range, |element| element.bg(rgb(0xe4efff)));
         match key.as_str() {
             "order_id" => base.text_color(rgb(0x5269e9))
                 .child(SharedString::from(label)).into_any_element(),
@@ -243,6 +272,7 @@ impl TableDelegate for GridDelegate {
         // Keep the authoritative column state in sync with GPUI's drag order.
         let moved_key = self.presentation[to_ix].key.to_string();
         let _ = self.model.move_column(&moved_key, to_ix);
+        self.refresh_selection_rect();
     }
 
     fn cell_text(&self, row_ix: usize, col_ix: usize, _cx: &App) -> String {

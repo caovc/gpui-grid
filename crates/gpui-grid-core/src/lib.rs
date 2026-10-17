@@ -8,7 +8,9 @@ use std::fmt::{Display, Formatter};
 mod edit;
 pub use edit::parse_cell_value;
 mod state;
+mod selection;
 pub use state::{CellAddress, ColumnState, GridApi, GridEvent, GridOptions, GridState, PinSide};
+pub use selection::{CellRange, SelectionRect};
 
 /// Typed value; use numbers for numeric sorting, not formatted strings.
 #[derive(Clone, Debug, PartialEq)]

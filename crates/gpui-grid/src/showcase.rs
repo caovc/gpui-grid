@@ -16,6 +16,7 @@ thread_local! {
     static PREVIEW_VISIBLE_ROWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static PREVIEW_ACTIVE_EDIT_ROW: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     static PREVIEW_LAST_SAVED: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+    static PREVIEW_SELECTED_CELLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 fn publish_visible_rows(count: usize) {
@@ -44,6 +45,18 @@ fn publish_saved_edit(address: &CellAddress, raw: &str) {
     PREVIEW_LAST_SAVED.with(|saved| *saved.borrow_mut() = format!("{}:{}:{}", address.row_id, address.column_key, raw));
     #[cfg(not(target_family = "wasm"))]
     let _ = (address, raw);
+}
+
+fn publish_selected_cells(count: usize) {
+    #[cfg(target_family = "wasm")]
+    PREVIEW_SELECTED_CELLS.with(|selected| selected.set(count));
+    #[cfg(not(target_family = "wasm"))]
+    let _ = count;
+}
+
+#[cfg(target_family = "wasm")]
+pub fn preview_selected_cell_count() -> u32 {
+    PREVIEW_SELECTED_CELLS.with(std::cell::Cell::get) as u32
 }
 
 #[cfg(target_family = "wasm")]
@@ -85,6 +98,7 @@ impl GridShowcase {
         ]);
         let data = sample_orders(12_480);
         publish_visible_rows(data.len());
+        publish_selected_cells(0);
         cx.new(|cx| {
             let table = cx.new(|cx| {
                 TableState::new(GridDelegate::new(data), window, cx)
@@ -117,9 +131,34 @@ impl GridShowcase {
         match event {
             TableEvent::SelectCell(row_ix, col_ix) => {
                 let address = table.read(cx).delegate().cell_info(*row_ix, *col_ix).map(|info| info.address);
-                // Avoid re-entering TableState while it is emitting its event.
-                // The edit session always keeps the stable row/column identity.
-                self.selected = address;
+                // TableState is emitting now: defer the model update rather
+                // than borrowing the emitting state mutably a second time.
+                let extend = window.modifiers().shift;
+                self.selected = address.clone();
+                if let Some(address) = address {
+                    let target = table.clone();
+                    cx.defer(move |cx| {
+                        let _ = target.update(cx, |state, cx| {
+                            if state.delegate_mut().select_address(Some(address), extend).is_ok() {
+                                publish_selected_cells(state.delegate().selected_cell_count());
+                                state.refresh(cx);
+                            }
+                        });
+                    });
+                }
+                cx.notify();
+            }
+            TableEvent::ClearSelection => {
+                self.selected = None;
+                let target = table.clone();
+                cx.defer(move |cx| {
+                    let _ = target.update(cx, |state, cx| {
+                        if state.delegate_mut().select_address(None, false).is_ok() {
+                            publish_selected_cells(0);
+                            state.refresh(cx);
+                        }
+                    });
+                });
                 cx.notify();
             }
             TableEvent::DoubleClickedCell(row_ix, col_ix) => {
@@ -337,6 +376,7 @@ impl Render for GridShowcase {
                                     let delegate = table.delegate_mut();
                                     delegate.set_quick_filter("Completed");
                                     publish_visible_rows(delegate.row_count());
+                                    publish_selected_cells(delegate.selected_cell_count());
                                     table.refresh(cx);
                                 });
                             }))
@@ -345,6 +385,7 @@ impl Render for GridShowcase {
                                     let delegate = table.delegate_mut();
                                     delegate.set_quick_filter("");
                                     publish_visible_rows(delegate.row_count());
+                                    publish_selected_cells(delegate.selected_cell_count());
                                     table.refresh(cx);
                                 });
                             }))

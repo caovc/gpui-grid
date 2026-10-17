@@ -14,9 +14,18 @@ use gpui_kit::component::table::{
 };
 
 pub use gpui_grid_core::{
-    CellAddress, Column as GridColumn, ColumnState, DataType, Edit, Filter, FilterOp,
+    CellAddress, Column as GridColumn, ColumnState, DataType, Edit, Filter, FilterOp, parse_cell_value,
     GridApi, GridEvent, GridOptions, GridState, PinSide, Row, sample_orders,
 };
+
+/// Identifies a cell independently of sort order, filters or virtualization.
+#[derive(Clone, Debug)]
+pub struct CellInfo {
+    pub address: CellAddress,
+    pub data_type: DataType,
+    pub editable: bool,
+    pub value: Value,
+}
 
 /// Use `cx.new(|cx| TableState::new(GridDelegate::new(model), window, cx))`
 /// to instantiate the GPUI state. `DataTable::new(&entity)` performs native
@@ -45,6 +54,22 @@ impl GridDelegate {
     }
 
     pub fn row_count(&self) -> usize { self.visible.len() }
+
+    /// Resolve the viewport indices immediately to stable row/column IDs.
+    /// The caller must hold on to `address`, not `row_ix`, while editing.
+    pub fn cell_info(&self, row_ix: usize, col_ix: usize) -> Option<CellInfo> {
+        let source_ix = *self.visible.get(row_ix)?;
+        let column_key = self.presentation.get(col_ix)?.key.to_string();
+        let storage_col = self.model.column_index(&column_key)?;
+        let column = self.model.columns.get(storage_col)?;
+        let row = self.model.row(source_ix)?;
+        Some(CellInfo {
+            address: CellAddress::new(row.id, column_key),
+            data_type: column.data_type,
+            editable: column.editable,
+            value: row.cells.get(storage_col)?.clone(),
+        })
+    }
 
     /// Replace the typed filters and recalculate the visible row indices.
     /// When called through a `TableState`, follow with `TableState::refresh(cx)`.

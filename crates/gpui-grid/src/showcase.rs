@@ -1,9 +1,8 @@
 //! A single Rust GPUI view shared by the macOS desktop and WebAssembly viewer.
 //! The editor is a GPUI InputState. JavaScript never stores or modifies grid rows.
-use crate::{CellAddress, DataType, Edit, Filter, FilterOp, GridDelegate, InlineEditor, InlineEditorSlot, Sort, Value, parse_cell_value, sample_orders};
+use crate::{CellAddress, DataType, Edit, GridDelegate, InlineEditor, InlineEditorSlot, parse_cell_value, sample_orders};
 use gpui_kit::*;
 use gpui_kit::base::StyledExt;
-use gpui_kit::component::button::Button;
 use gpui_kit::component::input::{Escape, InputEvent, InputState};
 use gpui_kit::component::table::{DataTable, TableEvent, TableState};
 
@@ -52,11 +51,11 @@ impl GridFeature {
     pub fn subtitle(self) -> &'static str {
         match self {
             Self::Overview => "Rust GPUI • Desktop + WASM • Shift+Click / Shift+Arrows range • Cmd/Ctrl+A all • F2 edit",
-            Self::Sorting => "Sorting · Click a column header or try numeric Rust sort controls",
-            Self::Filtering => "Filtering · Typed numeric filters are evaluated in gpui-grid-core",
+            Self::Sorting => "Sorting · Use each GPUI column header menu for ascending, descending or multi-sort",
+            Self::Filtering => "Filtering · Use the column header ⋯ menu and GPUI InputState to filter typed values",
             Self::Selection => "Selection · Shift+click or Shift+arrows; select every visible cell",
             Self::Editing => "Editing · Double-click or F2; Enter/Tab save; Esc cancels",
-            Self::Columns => "Columns · Resize, reorder, pin, or toggle visible Rust columns",
+            Self::Columns => "Columns · Resize, reorder and hide/show from native GPUI header menus",
             Self::Virtualization => "Virtualization · 50,000 typed Rust rows; only the viewport is drawn",
         }
     }
@@ -362,15 +361,6 @@ impl GridShowcase {
         }
     }
 
-    fn set_boolean_input(&mut self, value: bool, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(editor) = self.editor.as_ref() {
-            let input = editor.input.clone();
-            input.update(cx, |state, cx| {
-                state.set_value(if value { "true" } else { "false" }, window, cx);
-            });
-        }
-    }
-
     fn commit_edit(&mut self, cx: &mut Context<Self>) {
         let Some(session) = self.editor.as_ref() else { return };
         let address = session.address.clone();
@@ -513,8 +503,9 @@ impl GridShowcase {
 
 impl Render for GridShowcase {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let only_completed = self.table.clone();
-        let show_all = self.table.clone();
+        // Feature-specific actions belong in reusable GPUI column/row/cell
+        // controls. The showcase header only labels the example; it is not a
+        // second toolbar duplicating grid operations.
         let mut content = div().size_full().flex().flex_col().bg(rgb(0xf7f9fc))
             // The GPUI InputState binds Escape as an action. Once the input
             // owns focus its action is dispatched instead of a raw KeyDown,
@@ -558,158 +549,20 @@ impl Render for GridShowcase {
                             .child(div().text_xl().font_bold().text_color(rgb(0x273550)).child("GPUI Grid"))
                             .child(div().text_sm().text_color(rgb(0x7d899b)).child(self.feature.subtitle()))
                     )
-                    .child(
-                        div().flex().gap_2()
-                            .child(Button::new("edit-selected").label("Edit cell").on_click(cx.listener(|this, _, window, cx| {
-                                this.begin_selected_edit(window, cx);
-                            })))
-                            .child(Button::new("completed-only").label("Completed only").on_click(move |_, _, cx| {
-                                only_completed.update(cx, |table, cx| {
-                                    let delegate = table.delegate_mut();
-                                    delegate.set_quick_filter("Completed");
-                                    publish_visible_rows(delegate.row_count());
-                                    publish_selected_cells(delegate.selected_cell_count());
-                                    table.refresh(cx);
-                                });
-                            }))
-                            .child(Button::new("all-rows").label("All rows").on_click(move |_, _, cx| {
-                                show_all.update(cx, |table, cx| {
-                                    let delegate = table.delegate_mut();
-                                    delegate.set_quick_filter("");
-                                    publish_visible_rows(delegate.row_count());
-                                    publish_selected_cells(delegate.selected_cell_count());
-                                    table.refresh(cx);
-                                });
-                            }))
-                    )
-            );
-
-        // Every feature demo is genuine Rust logic driving the same GPUI
-        // component. The documentation website only changes the selected
-        // feature via the wasm-bindgen run() argument.
-        if matches!(self.feature, GridFeature::Sorting) {
-            let highest = self.table.clone();
-            let lowest = self.table.clone();
-            let reset = self.table.clone();
-            content = content.child(div().flex().items_center().gap_2().px_4().py_2()
-                .bg(rgb(0xeef3fb)).border_b_1().border_color(rgb(0xdce5f4))
-                .child(div().text_sm().text_color(rgb(0x50617d)).child("Numeric sorting · Revenue"))
-                .child(Button::new("revenue-desc").label("Highest first").on_click(move |_, _, cx| {
-                    highest.update(cx, |state, cx| {
-                        let delegate = state.delegate_mut();
-                        let _ = delegate.set_sort(vec![Sort::descending("amount")]);
-                        publish_sort_columns(delegate.model.state.sorts.len());
-                        state.refresh(cx);
-                    });
-                }))
-                .child(Button::new("revenue-asc").label("Lowest first").on_click(move |_, _, cx| {
-                    lowest.update(cx, |state, cx| {
-                        let delegate = state.delegate_mut();
-                        let _ = delegate.set_sort(vec![Sort::ascending("amount")]);
-                        publish_sort_columns(delegate.model.state.sorts.len());
-                        state.refresh(cx);
-                    });
-                }))
-                .child(Button::new("revenue-clear").label("Clear sort").on_click(move |_, _, cx| {
-                    reset.update(cx, |state, cx| {
-                        let delegate = state.delegate_mut();
-                        let _ = delegate.set_sort(vec![]);
-                        publish_sort_columns(delegate.model.state.sorts.len());
-                        state.refresh(cx);
-                    });
-                })));
-        } else if matches!(self.feature, GridFeature::Filtering) {
-            let numeric = self.table.clone();
-            let reset = self.table.clone();
-            content = content.child(div().flex().items_center().gap_2().px_4().py_2()
-                .bg(rgb(0xeef3fb)).border_b_1().border_color(rgb(0xdce5f4))
-                .child(div().text_sm().text_color(rgb(0x50617d)).child("Typed filters · Rust data engine"))
-                .child(Button::new("amount-over-5000").label("Revenue > $5,000").on_click(move |_, _, cx| {
-                    numeric.update(cx, |state, cx| {
-                        let delegate = state.delegate_mut();
-                        let _ = delegate.set_filters(vec![Filter {
-                            column: "amount".into(),
-                            op: FilterOp::GreaterThan,
-                            value: Value::Number(5_000.0),
-                        }]);
-                        publish_visible_rows(delegate.row_count());
-                        state.refresh(cx);
-                    });
-                }))
-                .child(Button::new("clear-typed-filters").label("Clear column filter").on_click(move |_, _, cx| {
-                    reset.update(cx, |state, cx| {
-                        let delegate = state.delegate_mut();
-                        let _ = delegate.set_filters(vec![]);
-                        publish_visible_rows(delegate.row_count());
-                        state.refresh(cx);
-                    });
-                })));
-        } else if matches!(self.feature, GridFeature::Selection) {
-            let select_all = self.table.clone();
-            let clear = self.table.clone();
-            content = content.child(div().flex().items_center().gap_2().px_4().py_2()
-                .bg(rgb(0xeef3fb)).border_b_1().border_color(rgb(0xdce5f4))
-                .child(div().text_sm().text_color(rgb(0x50617d)).child("Selection · stable row and column IDs"))
-                .child(Button::new("select-all-visible").label("Select all visible").on_click(move |_, _, cx| {
-                    select_all.update(cx, |state, cx| {
-                        let delegate = state.delegate_mut();
-                        let _ = delegate.select_all_visible();
-                        publish_selected_cells(delegate.selected_cell_count());
-                        state.refresh(cx);
-                    });
-                }))
-                .child(Button::new("clear-range").label("Clear selection").on_click(move |_, _, cx| {
-                    clear.update(cx, |state, cx| {
-                        let _ = state.delegate_mut().select_address(None, false);
-                        publish_selected_cells(0);
-                        state.clear_selection(cx);
-                        state.refresh(cx);
-                    });
-                })));
-        } else if matches!(self.feature, GridFeature::Columns) {
-            let hide = self.table.clone();
-            let show = self.table.clone();
-            content = content.child(div().flex().items_center().gap_2().px_4().py_2()
-                .bg(rgb(0xeef3fb)).border_b_1().border_color(rgb(0xdce5f4))
-                .child(div().text_sm().text_color(rgb(0x50617d)).child("Column state · Try dragging and resizing headers"))
-                .child(Button::new("hide-growth").label("Hide Growth").on_click(move |_, _, cx| {
-                    hide.update(cx, |state, cx| {
-                        let delegate = state.delegate_mut();
-                        let _ = delegate.set_column_visibility("growth", false);
-                        publish_visible_columns(delegate.displayed_columns_count());
-                        state.refresh(cx);
-                    });
-                }))
-                .child(Button::new("show-growth").label("Show Growth").on_click(move |_, _, cx| {
-                    show.update(cx, |state, cx| {
-                        let delegate = state.delegate_mut();
-                        let _ = delegate.set_column_visibility("growth", true);
-                        publish_visible_columns(delegate.displayed_columns_count());
-                        state.refresh(cx);
-                    });
-                })));
-        }
+             );
 
         if let Some(editor) = &self.editor {
             let heading = format!("Row {} · {}", editor.address.row_id, editor.address.column_key);
-            let kind = editor.data_type;
             let error = editor.error.clone();
             let mut panel = div().flex().items_center().gap_3().px_4().py_2()
                 .bg(rgb(0xeff3ff)).border_b_1().border_color(rgb(0xdbe3f7))
                 .child(div().text_sm().font_bold().text_color(rgb(0x425578)).child(heading))
                 .child(div().text_sm().text_color(rgb(0x61718a))
-                    .child("Editing in cell · Enter/Tab save · Esc cancel · no blur auto-commit"));
-            if kind == DataType::Boolean {
-                panel = panel
-                    .child(Button::new("editor-true").label("True").on_click(cx.listener(|this, _, window, cx| this.set_boolean_input(true, window, cx))))
-                    .child(Button::new("editor-false").label("False").on_click(cx.listener(|this, _, window, cx| this.set_boolean_input(false, window, cx))));
-            }
+                    .child("Editing in cell · Enter/Tab save · Esc cancel"));
             if let Some(error) = error {
                 panel = panel.child(div().text_sm().text_color(rgb(0xb83248)).child(error));
             }
-            content = content.child(panel
-                .child(Button::new("editor-save").label("Save").on_click(cx.listener(|this, _, _, cx| this.commit_edit(cx))))
-                .child(Button::new("editor-cancel").label("Cancel").on_click(cx.listener(|this, _, _, cx| this.cancel_edit(cx)))));
+            content = content.child(panel);
         } else if let Some(feedback) = &self.feedback {
             content = content.child(div().px_4().py_1().text_sm().text_color(rgb(0x556987)).child(feedback.clone()));
         }

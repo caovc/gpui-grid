@@ -611,8 +611,13 @@ mod tests {
         let selected = model.state.filters.iter().find(|f| f.column == "status").unwrap();
         assert!(matches!(&selected.op, FilterOp::OneOf(v) if v.len()==4));
         assert_eq!(model.view().len(), count);
-        assert!(matches!(model.toggle_column_value("order_id", Value::from("ORD-010420")),
-            Err(GridError::InvalidValue(_)), "high-cardinality Set Filter is not available");
+        assert!(
+            matches!(
+                model.toggle_column_value("order_id", Value::from("ORD-010420")),
+                Err(GridError::InvalidValue(_))
+            ),
+            "high-cardinality Set Filter is not available"
+        );
     }
 
     #[test]

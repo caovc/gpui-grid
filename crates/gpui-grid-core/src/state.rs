@@ -117,6 +117,12 @@ impl<'a> GridApi<'a> {
     pub(crate) fn new(model: &'a mut GridModel) -> Self { Self { model } }
     pub fn state(&self) -> &GridState { &self.model.state }
     pub fn set_sorts(&mut self, sorts: Vec<Sort>) -> Result<(), GridError> { self.model.set_sorts(sorts) }
+    pub fn upsert_column_filter(&mut self, filter: Filter) -> Result<(), GridError> {
+        self.model.upsert_column_filter(filter)
+    }
+    pub fn clear_column_filter(&mut self, key: &str) -> Result<(), GridError> {
+        self.model.clear_column_filter(key)
+    }
     pub fn set_filters(&mut self, filters: Vec<Filter>) -> Result<(), GridError> { self.model.set_filters(filters) }
     pub fn set_quick_filter(&mut self, query: impl Into<String>) { self.model.set_quick_filter(query); }
     pub fn move_column(&mut self, key: &str, to: usize) -> Result<(), GridError> { self.model.move_column(key, to) }

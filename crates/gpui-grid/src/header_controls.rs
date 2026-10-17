@@ -27,6 +27,14 @@ thread_local! {
     static OPEN_HEADER_MENU: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
+pub(crate) fn record_enter_filter(column_key: &str, accepted: bool, visible_rows: usize) {
+    if accepted {
+        record_action(format!("filter:{}:enter:{}", column_key, visible_rows));
+    } else {
+        record_action(format!("error:{}:enter", column_key));
+    }
+}
+
 fn record_action(action: impl Into<String>) {
     #[cfg(target_family = "wasm")]
     LAST_HEADER_ACTION.with(|last| *last.borrow_mut() = action.into());
@@ -60,6 +68,7 @@ pub(crate) struct HeaderSpec {
     /// One-based sort priority and direction.
     pub sort: Option<(usize, bool)>,
     pub input: Entity<InputState>,
+    pub input_focus: Option<FocusHandle>,
     pub table: Entity<TableState<GridDelegate>>,
     pub errors: HeaderErrors,
 }
@@ -233,8 +242,10 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
     let trigger_id = format!("gpui-grid-column-trigger:{}", key);
 
     let open_key = key.clone();
+    let input_focus = spec.input_focus.clone();
     let popover = Popover::new(pop_id)
         .on_open_change(move |open, _, _| record_open_menu(&open_key, *open))
+        .when_some(input_focus, |popover, focus| popover.track_focus(&focus))
         // The popover intercepts left mouse-down in GPUI BasePopover before
         // the TableState parent can interpret it as column sorting/dragging.
         .trigger(

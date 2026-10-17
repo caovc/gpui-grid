@@ -9,7 +9,7 @@
 //! demonstrates controls that are not yet available in this native adapter.
 use gpui_grid_core::{GridError, GridModel, Sort, Value};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
-use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::*;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::component::table::{
@@ -62,6 +62,7 @@ pub struct GridDelegate {
     inline_editor: InlineEditorSlot,
     /// Input entities persist across header re-renders and sort/filter operations.
     header_inputs: HashMap<String, Entity<InputState>>,
+    header_subscriptions: Vec<Subscription>,
     header_errors: HeaderErrors,
 }
 
@@ -107,6 +108,7 @@ impl GridDelegate {
             model, presentation, visible, selection_rect: None,
             inline_editor: Rc::new(RefCell::new(None)),
             header_inputs: HashMap::new(),
+            header_subscriptions: Vec::new(),
             header_errors: Rc::new(RefCell::new(HashMap::new())),
         };
         grid.refresh_selection_rect();
@@ -335,14 +337,49 @@ impl TableDelegate for GridDelegate {
             .map(|(priority, sort)| (priority + 1, sort.descending));
         // Construct lazily once per stable key. Never allocate an InputState
         // inside the Popover content closure during every repaint.
-        let input = self.header_inputs.entry(key.clone()).or_insert_with(|| {
-            cx.new(|cx| InputState::new(window, cx).placeholder("Type filter value..."))
-        }).clone();
+        let input = if let Some(input) = self.header_inputs.get(&key) {
+            input.clone()
+        } else {
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder("Type filter value..."));
+            let column_key = key.clone();
+            let errors = self.header_errors.clone();
+            // Enter on the focused native GPUI filter InputState applies a
+            // sensible default operator. The Popover also exposes explicit
+            // Contains/Equals and numeric comparison buttons.
+            let sub = cx.subscribe_in(&input, window,
+                move |table, input, event: &InputEvent, _, cx| {
+                    if !matches!(event, InputEvent::PressEnter { .. }) {
+                        return;
+                    }
+                    let raw = input.read(cx).value().to_string();
+                    let op = if data_type == DataType::Text {
+                        FilterOp::Contains
+                    } else {
+                        FilterOp::Equals
+                    };
+                    let result = table.delegate_mut().apply_column_filter(&column_key, op, &raw);
+                    if result.is_ok() {
+                        errors.borrow_mut().remove(&column_key);
+                    } else if let Err(error) = &result {
+                        errors.borrow_mut().insert(column_key.clone(), error.to_string());
+                    }
+                    let visible = table.delegate().row_count();
+                    header_controls::record_enter_filter(&column_key, result.is_ok(), visible);
+                    table.refresh(cx);
+                },
+            );
+            self.header_subscriptions.push(sub);
+            self.header_inputs.insert(key.clone(), input.clone());
+            input
+        };
+        let input_focus = if data_type != DataType::Boolean {
+            Some(input.focus_handle(cx))
+        } else { None };
         column_header(HeaderSpec {
             key,
             name: presentation.name,
             data_type, filter_active: active, sort,
-            input, table: cx.entity(), errors: self.header_errors.clone(),
+            input, input_focus, table: cx.entity(), errors: self.header_errors.clone(),
         })
     }
 

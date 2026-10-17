@@ -39,6 +39,14 @@ test('docs shell navigates to per-feature real WASM and does not implement a JS 
   assert.match(viewer, /wasm\.run\(feature\)/);
   assert.match(rust, /pub enum GridFeature/);
   assert.match(rust, /pub fn new_with_feature/);
+  const grid = await readFile(new URL('../crates/gpui-grid/src/lib.rs', import.meta.url), 'utf8');
+  const controls = await readFile(new URL('../crates/gpui-grid/src/header_controls.rs', import.meta.url), 'utf8');
+  assert.match(grid, /fn render_th\(/, 'column header must render inside TableDelegate');
+  assert.match(controls, /Popover::new\(pop_id\)/, 'native GPUI header Popover');
+  assert.match(controls, /Input::new\(&spec\.input\)/, 'native GPUI InputState');
+  assert.match(controls, /Clear this filter/);
+  assert.match(controls, /Show all columns/);
+  assert.doesNotMatch(shell, /sortRows|filterRows|renderCell/);
   assert.match(bootstrap, /pub fn run\(feature: Option<String>\)/);
   assert.match(build, /'catalog\.js'/);
   // JS is documentation only; never render a pseudo-grid row/cell.

@@ -126,6 +126,9 @@ impl<'a> GridApi<'a> {
     pub fn select_cell(&mut self, cell: Option<CellAddress>, extend: bool) -> Result<(), GridError> {
         self.model.select_cell(cell, extend)
     }
+    pub fn select_range(&mut self, range: Option<CellRange>) -> Result<(), GridError> {
+        self.model.select_range(range)
+    }
     pub fn edit(&mut self, edits: &[Edit]) -> Result<usize, GridError> { self.model.apply_edits(edits) }
     pub fn drain_events(&mut self) -> Vec<GridEvent> { self.model.drain_events() }
 }

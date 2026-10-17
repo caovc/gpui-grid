@@ -91,13 +91,38 @@ impl GridDelegate {
 
     pub(crate) fn inline_editor_slot(&self) -> InlineEditorSlot { self.inline_editor.clone() }
 
-    /// Find a currently visible cell using stable identities rather than viewport offsets.
-    pub fn cell_info_by_address(&self, address: &CellAddress) -> Option<CellInfo> {
+    /// Map a stable address to current display coordinates, if still visible.
+    /// Never persist the returned indices across sort/filter changes.
+    pub fn display_position(&self, address: &CellAddress) -> Option<(usize, usize)> {
         let row_ix = self.visible.iter().position(|&ix| {
             self.model.row(ix).is_some_and(|row| row.id == address.row_id)
         })?;
         let col_ix = self.presentation.iter().position(|col| col.key.to_string() == address.column_key)?;
+        Some((row_ix, col_ix))
+    }
+
+    pub fn cell_info_by_address(&self, address: &CellAddress) -> Option<CellInfo> {
+        let (row_ix, col_ix) = self.display_position(address)?;
         self.cell_info(row_ix, col_ix)
+    }
+
+    pub fn displayed_columns_count(&self) -> usize { self.presentation.len() }
+
+    /// Select all *visible* rows and columns using only the two endpoints.
+    /// No per-cell list is built, even for 100k rows or hundreds of columns.
+    pub fn select_all_visible(&mut self) -> Result<(), GridError> {
+        let end_row = self.visible.len().checked_sub(1);
+        let end_col = self.presentation.len().checked_sub(1);
+        let next = match (end_row, end_col) {
+            (Some(row_ix), Some(col_ix)) => Some(CellRange {
+                anchor: self.cell_info(0, 0).expect("valid first cell").address,
+                focus: self.cell_info(row_ix, col_ix).expect("valid last cell").address,
+            }),
+            _ => None,
+        };
+        self.model.select_range(next)?;
+        self.refresh_selection_rect();
+        Ok(())
     }
 
     /// Tab navigation follows displayed columns and skips readonly cells.

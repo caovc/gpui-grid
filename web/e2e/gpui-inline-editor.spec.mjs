@@ -36,6 +36,12 @@ test('inline GPUI CellEditor handles F2, Escape, and Tab without a DOM grid', as
     await expect.poll(async () => (await probe()).editorRow, { timeout: 15_000 }).toBe(0);
     expect((await probe()).saved, 'Escape must never commit the draft').toBe('');
 
+    // Cancel displays an informational status bar, changing table y positions.
+    // Reload for an unambiguous fixed-coordinate double-click instead of
+    // inadvertently clicking the shifted column header.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#runtime')).toContainText('GPUI WASM initialized', { timeout: 100_000 });
+    await expect(canvas).toBeVisible();
     // Double-click is the second real GPUI entry point to the same in-cell editor.
     await canvas.dblclick({ position: { x: 240, y: 158 }, delay: 75 });
     await expect.poll(async () => (await probe()).editorRow, { timeout: 15_000 }).toBe(1);

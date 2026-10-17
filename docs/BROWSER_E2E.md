@@ -21,7 +21,8 @@ The script starts a local Node static server on `127.0.0.1:4173`, then:
 2. Waits for the actual GPUI WebPlatform canvas and first rendered frame; screenshots it and checks for non-blank painted pixels (not just a canvas tag).
 3. Clicks the **GPUI-rendered** `Completed only` and `All rows` buttons using Canvas pointer events.
 4. Checks the resulting row count through `preview_visible_rows()`, a **read-only Rust diagnostic export** updated only by those Rust GPUI button handlers. The test never calls a filtering method from JavaScript.
-5. Stores screenshots, console errors, WASM network responses, pixel statistics, and traces as GitHub Actions artifacts.
+5. Double-clicks an editable GPUI canvas cell, reads Rust's **read-only** active-editor probe, types through the browser's input path, presses Enter, and verifies Rust recorded the committed text.
+6. Stores screenshots, console errors, WASM network responses, pixel statistics, and traces as GitHub Actions artifacts.
 
 ## CI software GPU behavior
 

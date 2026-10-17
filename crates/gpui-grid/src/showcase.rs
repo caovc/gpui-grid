@@ -12,6 +12,8 @@ use gpui_kit::component::table::{DataTable, TableEvent, TableState};
 #[cfg(target_family = "wasm")]
 thread_local! {
     static PREVIEW_VISIBLE_ROWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static PREVIEW_ACTIVE_EDIT_ROW: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    static PREVIEW_LAST_SAVED: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
 }
 
 fn publish_visible_rows(count: usize) {
@@ -24,6 +26,32 @@ fn publish_visible_rows(count: usize) {
 #[cfg(target_family = "wasm")]
 pub fn preview_visible_rows() -> usize {
     PREVIEW_VISIBLE_ROWS.with(std::cell::Cell::get)
+}
+
+// Observability only; exported for Playwright so the browser verifies that
+// pointer/IME events reached Rust. No JavaScript code can edit the grid model.
+fn publish_active_edit(row_id: u64) {
+    #[cfg(target_family = "wasm")]
+    PREVIEW_ACTIVE_EDIT_ROW.with(|row| row.set(row_id));
+    #[cfg(not(target_family = "wasm"))]
+    let _ = row_id;
+}
+
+fn publish_saved_edit(address: &CellAddress, raw: &str) {
+    #[cfg(target_family = "wasm")]
+    PREVIEW_LAST_SAVED.with(|saved| *saved.borrow_mut() = format!("{}:{}:{}", address.row_id, address.column_key, raw));
+    #[cfg(not(target_family = "wasm"))]
+    let _ = (address, raw);
+}
+
+#[cfg(target_family = "wasm")]
+pub fn preview_active_editor_row_id() -> u32 {
+    PREVIEW_ACTIVE_EDIT_ROW.with(std::cell::Cell::get) as u32
+}
+
+#[cfg(target_family = "wasm")]
+pub fn preview_last_saved_edit() -> String {
+    PREVIEW_LAST_SAVED.with(|saved| saved.borrow().clone())
 }
 
 struct EditSession {
@@ -121,6 +149,7 @@ impl GridShowcase {
         if !info.editable {
             self.editor = None;
             self._input_subscription = None;
+            publish_active_edit(0);
             self.feedback = Some(format!("{} is read-only", info.address.column_key));
             cx.notify();
             return;
@@ -134,6 +163,7 @@ impl GridShowcase {
             error: None,
         });
         self._input_subscription = Some(subscription);
+        publish_active_edit(self.editor.as_ref().expect("just created editor").address.row_id);
         self.feedback = None;
         cx.notify();
         input.focus_handle(cx).focus(window, cx);
@@ -197,6 +227,8 @@ impl GridShowcase {
         });
         match result {
             Ok(_) => {
+                publish_saved_edit(&address, &raw);
+                publish_active_edit(0);
                 self.feedback = Some(format!("Saved row {} · {}", address.row_id, address.column_key));
                 self.editor = None;
                 self._input_subscription = None;
@@ -211,6 +243,7 @@ impl GridShowcase {
     }
 
     fn cancel_edit(&mut self, cx: &mut Context<Self>) {
+        publish_active_edit(0);
         self.editor = None;
         self._input_subscription = None;
         self.feedback = Some("Edit canceled".into());

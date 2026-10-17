@@ -114,19 +114,22 @@ grid.edit(&[Edit {
   },
   {
     id:'columns',group:'features',icon:'▥',en:'Columns',title:'列管理 Columns',short:'列定义与操作',
-    status:'live',summary:'调整列宽、拖动列、固定左侧列，以及通过 Rust ColumnState 显示或隐藏字段。',
-    tags:['Resize','Reorder','Pinned','Visibility'],
-    demoContext:'拖动表头调整列顺序和宽度；在列头 ⋯ 菜单选择 Hide column / Show all columns。',
-    hints:['点击表头 ⋯：Hide column / Show all columns','拖动列分隔线调整宽度','拖动表头移动列','固定列及可见性均来自 Rust ColumnState'],
+    status:'live',summary:'使用原生表头 ⋯ 菜单移动、隐藏、固定和重置列；显示索引和持久列状态分离。',
+    tags:['Move Left/Right','Pin Left','Reset','Visibility'],
+    demoContext:'在列头 ⋯ 中点击 Move → / Pin left / Unpin / Reset；也可以拖动表头调整列顺序和宽度。',
+    hints:['点击列头 ⋯：Move → 或 ← Move（跨固定列边界禁用）','Pin left / Unpin：固定到表格左侧','Hide column / Show all columns / Reset','拖动列分隔线调整宽度；列移动不会改变原始 Row 数据'],
     description:'GridModel.state.columns 维护展示列顺序、宽度、显隐与固定状态。数据 Rows 仍保持其原始存储顺序。GridDelegate 仅在列结构发生变化时重建 GPUI presentation cache，避免把屏幕列下标当成持久数据字段 ID。',
-    steps:['Column 定义字段名、类型、编辑权限与默认宽度。','在 GPUI 表头拖动列以改变展示顺序。','调用 set_column_visibility 时重建列展示但不改变原始 Rows。'],
-    api:[['Column::new(key, label, DataType)','创建类型化列定义'],['GridDelegate::set_column_visibility(key, bool)','通过 Rust 显示/隐藏列'],['GridModel::move_column(key, index)','修改展示列序'],['GridModel::state.columns','获取状态而不改动数据布局']],
-    notes:['列工具面板和完整的宽度持久化仍在 #9 开发中。','部分列排序/移动/固定交互由 GPUI Kit DataTable 提供。'],
-    code:`use gpui_grid::{GridDelegate, sample_orders};
+    steps:['Column 定义字段名、类型、编辑权限与默认宽度。','使用真正的 GPUI 表头菜单执行 Move →、Pin left、Hide column 或 Reset。','隐藏列后按可见索引移动列，不影响 Row 数据顺序及 stable CellAddress。'],
+    api:[['Column::new(key, label, DataType)','创建类型化列定义'],['GridDelegate::set_column_visibility(key, bool)','通过 Rust 显示/隐藏列'],['GridModel::move_visible_column(key, index)','按可见列索引安全调整列序'],['GridModel::set_column_pin(key, PinSide)','向左固定或取消固定'],['GridModel::reset_column_state()','还原默认列状态，不丢失筛选或选区']],
+    notes:['固定到右侧、独立列侧栏、列宽持久化以及导入/导出列状态仍待 #9 完善。','跨 pinned/unpinned 分区的移动会被拒绝；先 Pin left 或 Unpin。'],
+    code:`use gpui_grid::{GridDelegate, PinSide, sample_orders};
 
 let mut grid = GridDelegate::new(sample_orders(12_480));
 grid.set_column_visibility("growth", false).unwrap();
-// The row storage is unchanged, even when presentation columns move.`,
+grid.move_visible_column("customer", 2).unwrap();
+grid.set_column_pin_left("customer", true).unwrap();
+grid.reset_columns();
+// Column state resets without changing typed row storage.`,
   },
   {
     id:'virtualization',group:'features',icon:'▧',en:'Virtualization',title:'虚拟滚动 Virtualization',short:'虚拟滚动',

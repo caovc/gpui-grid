@@ -27,6 +27,22 @@ mod wasm {
         gpui_grid::showcase::preview_selected_cell_count()
     }
 
+    /// Live docs viewer diagnostics: all values originate in Rust.
+    #[wasm_bindgen]
+    pub fn preview_feature() -> String {
+        gpui_grid::showcase::preview_feature()
+    }
+
+    #[wasm_bindgen]
+    pub fn preview_sort_columns() -> u32 {
+        gpui_grid::showcase::preview_sort_columns()
+    }
+
+    #[wasm_bindgen]
+    pub fn preview_visible_columns() -> u32 {
+        gpui_grid::showcase::preview_visible_columns()
+    }
+
     /// Read-only editor activity probe for the genuine GPUI Canvas E2E test.
     #[wasm_bindgen]
     pub fn preview_active_editor_row_id() -> u32 {
@@ -40,7 +56,7 @@ mod wasm {
     }
 
     #[wasm_bindgen]
-    pub fn run() -> Result<(), JsValue> {
+    pub fn run(feature: Option<String>) -> Result<(), JsValue> {
         console_error_panic_hook::set_once();
         gpui_kit::platform::web_init();
         let platform = Rc::new(WebPlatform::new_with_backend_and_font_fallback(
@@ -53,7 +69,8 @@ mod wasm {
             .with_http_client(http_client)
             .with_assets(gpui_kit::assets::Assets::new("https://caovc.github.io/gpui-grid/"));
 
-        let launch = |cx: &mut App| {
+        let feature = feature.unwrap_or_else(|| "overview".to_string());
+        let launch = move |cx: &mut App| {
             // Web canvas does not automatically see desktop system fonts.
             // These small, OFL-licensed font subsets are retrieved at WASM build time.
             let fonts = vec![
@@ -69,7 +86,7 @@ mod wasm {
                 theme.mono_font_family = "JetBrains Mono".into();
             });
             gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
-                GridShowcase::new(window, cx)
+                GridShowcase::new_with_feature(&feature, window, cx)
             }).expect("Failed to open GPUI Grid browser window");
             cx.activate(true);
         };

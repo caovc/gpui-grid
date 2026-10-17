@@ -51,18 +51,28 @@ pub struct GridDelegate {
 }
 
 impl GridDelegate {
+    /// Presentation cache is regenerated from the authoritative Rust column
+    /// state; hiding a column never mutates the typed Row storage.
+    fn presentation_for(model: &GridModel) -> Vec<UiColumn> {
+        model.state.columns.iter().filter(|col| col.visible).map(|state| {
+            let col = &model.columns[model.column_index(&state.key).expect("state column key validated")];
+            let base = UiColumn::new(col.key.clone(), col.name.clone())
+                .width(px(state.width)).min_width(px(76.0)).max_width(px(580.0)).sortable();
+            if state.pin == PinSide::Left { base.fixed_left() } else { base }
+        }).collect()
+    }
+
+    pub fn set_column_visibility(&mut self, key: &str, visible: bool) -> Result<(), GridError> {
+        self.model.set_column_visible(key, visible)?;
+        self.presentation = Self::presentation_for(&self.model);
+        self.refresh_selection_rect();
+        Ok(())
+    }
+
     pub fn new(model: GridModel) -> Self {
         // GPUI elements are a transient cache; GridModel.state owns the order,
         // width, pin and visibility independently of the virtual viewport.
-        let presentation = model.state.columns.iter().filter(|col| col.visible).map(|state| {
-            let col = &model.columns[model.column_index(&state.key).expect("state column key validated")];
-            let base = UiColumn::new(col.key.clone(), col.name.clone())
-                .width(px(state.width))
-                .min_width(px(76.0))
-                .max_width(px(580.0))
-                .sortable();
-            if state.pin == PinSide::Left { base.fixed_left() } else { base }
-        }).collect();
+        let presentation = Self::presentation_for(&model);
         let visible = model.view();
         let mut grid = Self {
             model, presentation, visible, selection_rect: None,

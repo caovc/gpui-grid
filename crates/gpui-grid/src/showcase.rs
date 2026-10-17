@@ -1,6 +1,6 @@
 //! A single Rust GPUI view shared by the macOS desktop and WebAssembly viewer.
 //! The editor is a GPUI InputState. JavaScript never stores or modifies grid rows.
-use crate::{CellAddress, DataType, Edit, GridDelegate, InlineEditor, InlineEditorSlot, parse_cell_value, sample_orders};
+use crate::{CellAddress, DataType, Edit, Filter, FilterOp, GridDelegate, InlineEditor, InlineEditorSlot, Sort, Value, parse_cell_value, sample_orders};
 use gpui_kit::*;
 use gpui_kit::base::StyledExt;
 use gpui_kit::component::button::Button;
@@ -16,6 +16,52 @@ gpui_kit::actions!(
     ]
 );
 
+/// A feature-focused showcase still renders exactly the same reusable GPUI
+/// DataTable and GridDelegate as the desktop application. The docs shell only
+/// selects which Rust demo to launch; it has no table implementation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GridFeature {
+    Overview, Sorting, Filtering, Selection, Editing, Columns, Virtualization,
+}
+impl GridFeature {
+    pub fn from_key(key: &str) -> Self {
+        match key {
+            "sorting" => Self::Sorting,
+            "filtering" => Self::Filtering,
+            "selection" => Self::Selection,
+            "editing" => Self::Editing,
+            "columns" => Self::Columns,
+            "virtualization" => Self::Virtualization,
+            _ => Self::Overview,
+        }
+    }
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Overview => "overview",
+            Self::Sorting => "sorting",
+            Self::Filtering => "filtering",
+            Self::Selection => "selection",
+            Self::Editing => "editing",
+            Self::Columns => "columns",
+            Self::Virtualization => "virtualization",
+        }
+    }
+    pub fn row_count(self) -> usize {
+        if self == Self::Virtualization { 50_000 } else { 12_480 }
+    }
+    pub fn subtitle(self) -> &'static str {
+        match self {
+            Self::Overview => "Rust GPUI • Desktop + WASM • Shift+Click / Shift+Arrows range • Cmd/Ctrl+A all • F2 edit",
+            Self::Sorting => "Sorting · Click a column header or try numeric Rust sort controls",
+            Self::Filtering => "Filtering · Typed numeric filters are evaluated in gpui-grid-core",
+            Self::Selection => "Selection · Shift+click or Shift+arrows; select every visible cell",
+            Self::Editing => "Editing · Double-click or F2; Enter/Tab save; Esc cancels",
+            Self::Columns => "Columns · Resize, reorder, pin, or toggle visible Rust columns",
+            Self::Virtualization => "Virtualization · 50,000 typed Rust rows; only the viewport is drawn",
+        }
+    }
+}
+
 // Read-only diagnostics for the Chromium smoke test. The actual button and
 // editor handlers below publish counts after mutating the real Rust model.
 #[cfg(target_family = "wasm")]
@@ -24,6 +70,45 @@ thread_local! {
     static PREVIEW_ACTIVE_EDIT_ROW: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     static PREVIEW_LAST_SAVED: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
     static PREVIEW_SELECTED_CELLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static PREVIEW_FEATURE: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+    static PREVIEW_SORT_COLUMNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static PREVIEW_VISIBLE_COLUMNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn publish_feature(feature: GridFeature) {
+    #[cfg(target_family = "wasm")]
+    PREVIEW_FEATURE.with(|active| *active.borrow_mut() = feature.key().to_string());
+    #[cfg(not(target_family = "wasm"))]
+    let _ = feature;
+}
+
+#[cfg(target_family = "wasm")]
+pub fn preview_feature() -> String {
+    PREVIEW_FEATURE.with(|feature| feature.borrow().clone())
+}
+
+fn publish_sort_columns(count: usize) {
+    #[cfg(target_family = "wasm")]
+    PREVIEW_SORT_COLUMNS.with(|columns| columns.set(count));
+    #[cfg(not(target_family = "wasm"))]
+    let _ = count;
+}
+
+#[cfg(target_family = "wasm")]
+pub fn preview_sort_columns() -> u32 {
+    PREVIEW_SORT_COLUMNS.with(std::cell::Cell::get) as u32
+}
+
+fn publish_visible_columns(count: usize) {
+    #[cfg(target_family = "wasm")]
+    PREVIEW_VISIBLE_COLUMNS.with(|columns| columns.set(count));
+    #[cfg(not(target_family = "wasm"))]
+    let _ = count;
+}
+
+#[cfg(target_family = "wasm")]
+pub fn preview_visible_columns() -> u32 {
+    PREVIEW_VISIBLE_COLUMNS.with(std::cell::Cell::get) as u32
 }
 
 fn publish_visible_rows(count: usize) {
@@ -84,6 +169,7 @@ struct EditSession {
 }
 
 pub struct GridShowcase {
+    feature: GridFeature,
     table: Entity<TableState<GridDelegate>>,
     inline_editor: InlineEditorSlot,
     selected: Option<CellAddress>,
@@ -99,6 +185,13 @@ pub struct GridShowcase {
 impl GridShowcase {
     /// Shared entry point for desktop and the browser's real GPUI WebPlatform.
     pub fn new(window: &mut Window, cx: &mut App) -> Entity<Self> {
+        Self::new_with_feature("overview", window, cx)
+    }
+
+    /// Start a live, feature-specific Rust/GPUI example for the docs site.
+    /// This API is also usable in a native app; it is not WASM-only logic.
+    pub fn new_with_feature(key: &str, window: &mut Window, cx: &mut App) -> Entity<Self> {
+        let feature = GridFeature::from_key(key);
         // GPUI dispatches tab/shift-tab as key-bound actions before raw
         // KeyDown events (Root and DataTable already bind these keys).
         // This context exists only inside the active in-cell editor.
@@ -111,8 +204,11 @@ impl GridShowcase {
             KeyBinding::new("shift-right", ExtendSelectionRight, Some("DataTable")),
             KeyBinding::new("secondary-a", SelectGridAll, Some("DataTable")),
         ]);
-        let data = sample_orders(12_480);
+        let data = sample_orders(feature.row_count());
+        publish_feature(feature);
         publish_visible_rows(data.len());
+        publish_visible_columns(data.columns.len());
+        publish_sort_columns(0);
         publish_selected_cells(0);
         cx.new(|cx| {
             let table = cx.new(|cx| {
@@ -125,6 +221,7 @@ impl GridShowcase {
             let inline_editor = table.read(cx).delegate().inline_editor_slot();
             let subscription = cx.subscribe_in(&table, window, Self::on_table_event);
             Self {
+                feature,
                 table,
                 inline_editor,
                 selected: None,
@@ -459,7 +556,7 @@ impl Render for GridShowcase {
                     .child(
                         div().flex().flex_col().gap_1()
                             .child(div().text_xl().font_bold().text_color(rgb(0x273550)).child("GPUI Grid"))
-                            .child(div().text_sm().text_color(rgb(0x7d899b)).child("Rust GPUI • Desktop + WASM • Shift+Click / Shift+Arrows range • Cmd/Ctrl+A all • F2 edit"))
+                            .child(div().text_sm().text_color(rgb(0x7d899b)).child(self.feature.subtitle()))
                     )
                     .child(
                         div().flex().gap_2()
@@ -486,6 +583,112 @@ impl Render for GridShowcase {
                             }))
                     )
             );
+
+        // Every feature demo is genuine Rust logic driving the same GPUI
+        // component. The documentation website only changes the selected
+        // feature via the wasm-bindgen run() argument.
+        if matches!(self.feature, GridFeature::Sorting) {
+            let highest = self.table.clone();
+            let lowest = self.table.clone();
+            let reset = self.table.clone();
+            content = content.child(div().flex().items_center().gap_2().px_4().py_2()
+                .bg(rgb(0xeef3fb)).border_b_1().border_color(rgb(0xdce5f4))
+                .child(div().text_sm().text_color(rgb(0x50617d)).child("Numeric sorting · Revenue"))
+                .child(Button::new("revenue-desc").label("Highest first").on_click(move |_, _, cx| {
+                    highest.update(cx, |state, cx| {
+                        let delegate = state.delegate_mut();
+                        let _ = delegate.set_sort(vec![Sort::descending("amount")]);
+                        publish_sort_columns(delegate.model.state.sorts.len());
+                        state.refresh(cx);
+                    });
+                }))
+                .child(Button::new("revenue-asc").label("Lowest first").on_click(move |_, _, cx| {
+                    lowest.update(cx, |state, cx| {
+                        let delegate = state.delegate_mut();
+                        let _ = delegate.set_sort(vec![Sort::ascending("amount")]);
+                        publish_sort_columns(delegate.model.state.sorts.len());
+                        state.refresh(cx);
+                    });
+                }))
+                .child(Button::new("revenue-clear").label("Clear sort").on_click(move |_, _, cx| {
+                    reset.update(cx, |state, cx| {
+                        let delegate = state.delegate_mut();
+                        let _ = delegate.set_sort(vec![]);
+                        publish_sort_columns(delegate.model.state.sorts.len());
+                        state.refresh(cx);
+                    });
+                })));
+        } else if matches!(self.feature, GridFeature::Filtering) {
+            let numeric = self.table.clone();
+            let reset = self.table.clone();
+            content = content.child(div().flex().items_center().gap_2().px_4().py_2()
+                .bg(rgb(0xeef3fb)).border_b_1().border_color(rgb(0xdce5f4))
+                .child(div().text_sm().text_color(rgb(0x50617d)).child("Typed filters · Rust data engine"))
+                .child(Button::new("amount-over-5000").label("Revenue > $5,000").on_click(move |_, _, cx| {
+                    numeric.update(cx, |state, cx| {
+                        let delegate = state.delegate_mut();
+                        let _ = delegate.set_filters(vec![Filter {
+                            column: "amount".into(),
+                            op: FilterOp::GreaterThan,
+                            value: Value::Number(5_000.0),
+                        }]);
+                        publish_visible_rows(delegate.row_count());
+                        state.refresh(cx);
+                    });
+                }))
+                .child(Button::new("clear-typed-filters").label("Clear column filter").on_click(move |_, _, cx| {
+                    reset.update(cx, |state, cx| {
+                        let delegate = state.delegate_mut();
+                        let _ = delegate.set_filters(vec![]);
+                        publish_visible_rows(delegate.row_count());
+                        state.refresh(cx);
+                    });
+                })));
+        } else if matches!(self.feature, GridFeature::Selection) {
+            let select_all = self.table.clone();
+            let clear = self.table.clone();
+            content = content.child(div().flex().items_center().gap_2().px_4().py_2()
+                .bg(rgb(0xeef3fb)).border_b_1().border_color(rgb(0xdce5f4))
+                .child(div().text_sm().text_color(rgb(0x50617d)).child("Selection · stable row and column IDs"))
+                .child(Button::new("select-all-visible").label("Select all visible").on_click(move |_, _, cx| {
+                    select_all.update(cx, |state, cx| {
+                        let delegate = state.delegate_mut();
+                        let _ = delegate.select_all_visible();
+                        publish_selected_cells(delegate.selected_cell_count());
+                        state.refresh(cx);
+                    });
+                }))
+                .child(Button::new("clear-range").label("Clear selection").on_click(move |_, _, cx| {
+                    clear.update(cx, |state, cx| {
+                        let _ = state.delegate_mut().select_address(None, false);
+                        publish_selected_cells(0);
+                        state.clear_selection(cx);
+                        state.refresh(cx);
+                    });
+                })));
+        } else if matches!(self.feature, GridFeature::Columns) {
+            let hide = self.table.clone();
+            let show = self.table.clone();
+            content = content.child(div().flex().items_center().gap_2().px_4().py_2()
+                .bg(rgb(0xeef3fb)).border_b_1().border_color(rgb(0xdce5f4))
+                .child(div().text_sm().text_color(rgb(0x50617d)).child("Column state · Try dragging and resizing headers"))
+                .child(Button::new("hide-growth").label("Hide Growth").on_click(move |_, _, cx| {
+                    hide.update(cx, |state, cx| {
+                        let delegate = state.delegate_mut();
+                        let _ = delegate.set_column_visibility("growth", false);
+                        publish_visible_columns(delegate.displayed_columns_count());
+                        state.refresh(cx);
+                    });
+                }))
+                .child(Button::new("show-growth").label("Show Growth").on_click(move |_, _, cx| {
+                    show.update(cx, |state, cx| {
+                        let delegate = state.delegate_mut();
+                        let _ = delegate.set_column_visibility("growth", true);
+                        publish_visible_columns(delegate.displayed_columns_count());
+                        state.refresh(cx);
+                    });
+                })));
+        }
 
         if let Some(editor) = &self.editor {
             let heading = format!("Row {} · {}", editor.address.row_id, editor.address.column_key);

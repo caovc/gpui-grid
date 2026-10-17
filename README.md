@@ -39,6 +39,8 @@ The upstream `wasm_thread` 0.3.3 dependency currently requires an unstable Rust 
 
 `gpui-grid-web` is a real `cdylib` crate. It builds the same `GridShowcase` Rust `Render` tree that the native desktop executable starts. The JS host only loads `gpui_grid_web.js`, initializes `gpui_grid_web_bg.wasm`, and calls Rust's exported `run()`; GPUI WebPlatform paints the actual UI into a canvas via WebGPU/WebGL2. Build **fails** if the WASM artifact is missing, rather than silently serving a mock.
 
+**In-grid interaction milestone:** Native GPUI header `⋯` menus now use `TableDelegate::render_th` + GPUI `Popover`/`InputState` for sorting, typed filtering and column hide/show. This is a **reusable component interaction**, not a showcase-only button. The interactive filter can preserve filters applied on other columns; invalid numeric input is rejected before changing Core state. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/FEATURES.md](docs/FEATURES.md).
+
 **Live documentation examples:** The site has feature-specific genuine Rust GPUI demos for Overview, Sorting, Filtering, Cell Selection, Cell Editing, Columns, and Virtualization (50k local rows). The page URL accepts `?feature=sorting`, `?feature=filtering`, `?feature=selection`, etc. The `web/catalog.js` module contains *documentation only*; it never stores data rows or simulates a grid. The viewer passes the selected feature to the `gpui-grid-web` Rust WebAssembly entry point, which creates the same `GridShowcase` used by native GPUI desktop apps. Advanced Grouping, Clipboard, Async RowModel, and Pivot pages are explicitly marked Core-only or Planned. See [feature matrix](docs/FEATURES.md) and [website architecture](docs/WEBSITE.md).
 
 ### Browser limitations

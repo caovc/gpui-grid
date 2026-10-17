@@ -6,6 +6,7 @@
 //! and WebAssembly.
 use crate::{DataType, FilterOp, GridDelegate};
 use gpui_kit::*;
+use gpui_kit::base::StyledExt as _;
 use gpui_kit::component::{
     button::Button,
     input::{Input, InputState},
@@ -16,6 +17,38 @@ use gpui_kit::prelude::FluentBuilder as _;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 pub(crate) type HeaderErrors = Rc<RefCell<HashMap<String, String>>>;
+
+// Read-only evidence for real Chromium Canvas tests. The diagnostics are
+// maintained only by native GPUI Popover/button callbacks; no JS grid APIs.
+#[cfg(target_family = "wasm")]
+thread_local! {
+    static LAST_HEADER_ACTION: RefCell<String> = const { RefCell::new(String::new()) };
+    static OPEN_HEADER_MENU: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+fn record_action(action: impl Into<String>) {
+    #[cfg(target_family = "wasm")]
+    LAST_HEADER_ACTION.with(|last| *last.borrow_mut() = action.into());
+    #[cfg(not(target_family = "wasm"))]
+    let _ = action;
+}
+
+fn record_open_menu(key: &str, open: bool) {
+    #[cfg(target_family = "wasm")]
+    OPEN_HEADER_MENU.with(|value| *value.borrow_mut() =
+        if open { key.to_string() } else { String::new() });
+    #[cfg(not(target_family = "wasm"))]
+    let _ = (key, open);
+}
+
+#[cfg(target_family = "wasm")]
+pub(crate) fn preview_last_header_action() -> String {
+    LAST_HEADER_ACTION.with(|action| action.borrow().clone())
+}
+#[cfg(target_family = "wasm")]
+pub(crate) fn preview_open_header_menu() -> String {
+    OPEN_HEADER_MENU.with(|key| key.borrow().clone())
+}
 
 /// No viewport indices or screen positions are retained by a column menu.
 pub(crate) struct HeaderSpec {
@@ -75,6 +108,11 @@ fn sort_button(key: &str, table: &Entity<TableState<GridDelegate>>, command: Sor
                 if result.is_ok() { state.refresh(cx); }
                 result
             });
+            if result.is_ok() {
+                record_action(format!("sort:{}:{}",
+                    key,
+                    command.slug()));
+            }
             cx.stop_propagation();
         })
 }
@@ -106,8 +144,13 @@ fn filter_button(
                 result
             });
             match result {
-                Ok(_) => { errors.borrow_mut().remove(&key); }
+                Ok(_) => {
+                    errors.borrow_mut().remove(&key);
+                    let visible = target.read(cx).delegate().row_count();
+                    record_action(format!("filter:{}:{}:{}", key, slug, visible));
+                }
                 Err(error) => {
+                    record_action(format!("error:{}:{}", key, slug));
                     errors.borrow_mut().insert(key.clone(), error.to_string());
                     target.update(cx, |_, cx| cx.notify());
                 }
@@ -134,7 +177,10 @@ fn clear_filter_button(
                 result
             });
             match result {
-                Ok(_) => { errors.borrow_mut().remove(&key); }
+                Ok(_) => {
+                    errors.borrow_mut().remove(&key);
+                    record_action(format!("filter-clear:{}", key));
+                }
                 Err(error) => { errors.borrow_mut().insert(key.clone(), error.to_string()); }
             };
             cx.stop_propagation();
@@ -153,6 +199,7 @@ fn hide_column_button(key: &str, table: &Entity<TableState<GridDelegate>>) -> Bu
                     state.refresh(cx);
                 }
             });
+            record_action(format!("column-hide:{}", key));
             cx.stop_propagation();
         })
 }
@@ -169,6 +216,7 @@ fn show_columns_button(key: &str, table: &Entity<TableState<GridDelegate>>) -> B
                     state.refresh(cx);
                 }
             });
+            record_action("columns-show-all");
             cx.stop_propagation();
         })
 }
@@ -183,7 +231,9 @@ pub(crate) fn column_header(spec: HeaderSpec) -> impl IntoElement {
     let pop_id = format!("gpui-grid-column-menu:{}", key);
     let trigger_id = format!("gpui-grid-column-trigger:{}", key);
 
+    let open_key = key.clone();
     let popover = Popover::new(pop_id)
+        .on_open_change(move |open, _, _| record_open_menu(&open_key, *open))
         // The popover intercepts left mouse-down in GPUI BasePopover before
         // the TableState parent can interpret it as column sorting/dragging.
         .trigger(

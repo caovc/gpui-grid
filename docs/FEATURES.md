@@ -22,6 +22,9 @@ One view is used for **desktop native GPUI and the browser's GPUI WebPlatform**.
 | Browser WebAssembly renderer | n/a | n/a | GPUI WebPlatform + wasm-bindgen |
 | Feature-specific docs examples (sorting, filtering, selection, editing, columns, virtualization) | Shared `GridModel` | ✅ same `GridShowcase` modes | ✅ real WASM mode selected via `run(feature)` |
 | Typed amount filter preset in feature demo | ✅ | ✅ Rust GPUI toolbar | ✅ Rust GPUI toolbar |
+| In-grid column header menu: asc/desc/multi-sort/clear | ✅ | ✅ GPUI Popover on each header | ✅ same native GPUI header (GPU dependent) |
+| In-grid typed column filter: text contains/equals, numeric >/</=, Boolean | ✅ | ✅ GPUI Popover + InputState | ✅ same native GPUI header (GPU dependent) |
+| In-grid column hide / restore visibility | ✅ | ✅ GPUI Popover, stable keys | ✅ same native GPUI header (GPU dependent) |
 | Column visibility preset in feature demo | ✅ | ✅ Rust GPUI toolbar | ✅ Rust GPUI toolbar |
 | Sorting toolbar (asc/desc/reset) | ✅ | ✅ Rust GPUI toolbar | ✅ Rust GPUI toolbar |
 
@@ -30,6 +33,8 @@ Range selection phase 2 (#5): Shift+arrow keys extend the rectangle from the act
 Range selection phase 1 (#5): click a cell to anchor the selection, Shift+click another to extend an inclusive rectangle. The Rust model retains stable row IDs and column keys, computes rectangle coordinates against the current sort/filter/column order, and hides highlighting rather than pointing at the wrong records when an endpoint is filtered out. Selection state drives GPUI cell backgrounds on desktop and in real WASM; drag gestures, multi-row selection and advanced keyboard navigation remain follow-ups.
 
 Editor v2: double-click a visible editable cell or select one and press **F2** / click **Edit cell**; a real Rust GPUI InputState is painted **inside the table cell**. Press Enter to commit; Tab/Shift+Tab commit and move to the next/previous editable cell; Esc or Cancel discard the draft. Save and Boolean controls remain available in the toolbar. Errors keep the editor active. We intentionally **do not auto-commit on blur**, avoiding IME composition loss. Numeric/boolean parsing and readonly enforcement remain in the Rust core. IME and platform-specific keyboard behavior still require broader coverage, so #4 remains open until fully verified.
+
+Native column-header menus (#7/#8/#9 initial milestone): click the **⋯** in a grid column header (not the showcase toolbar). A GPUI Popover contains sort asc/desc, add to multi-sort, clear sort, typed filter input and operator buttons (text Contains/Equals, numeric >/< /=, Boolean True/False), clear-this-column filter, hide column and restore all columns. All controls call the authoritative typed Rust GridModel, preserve other columns' filter conditions, and refresh GPUI DataTable; invalid numeric values preserve previous filter and show an error. Future work includes full operator dropdowns, set/multi-condition filters, saved column state, keyboard/focus accessibility and comprehensive browser interaction tests.
 
 The [feature documentation website](../web/) uses a separate HTML shell for navigation, API reference, code snippets, and search. **All Live Grid demos run a real Rust GPUI Canvas**. Planned and Core-only pages deliberately show no fake interactive grid. Feature modes are selectable by deep link `?feature=sorting` etc., and their toolbar operations are implemented in Rust. The Virtualization page constructs 50,000 local rows; this is a demonstration, not a performance guarantee.
 

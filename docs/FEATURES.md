@@ -11,6 +11,7 @@ One view is used for **desktop native GPUI and the browser's GPUI WebPlatform**.
 | Column resize, move, pinned first column | n/a | ✅ GPUI Kit | ✅ GPUI Kit |
 | Sort by column | ✅ | ✅ | ✅ |
 | Select cell and row | n/a | ✅ | ✅ |
+| Stable-ID rectangular selection (Shift+click, viewport highlight) | ✅ | ✅ initial implementation | ✅ same GPUI Canvas (browser GPU dependent) |
 | Quick filter (Completed / All) | ✅ | ✅ | ✅ |
 | Complex typed filters | ✅ | API only | API only |
 | Multi-column sort | ✅ | API only | API only |
@@ -19,6 +20,8 @@ One view is used for **desktop native GPUI and the browser's GPUI WebPlatform**.
 | Grouping / aggregation | ✅ | UI not wired | UI not wired |
 | Excel XLSX, Pivot, server-side row model | ❌ | ❌ | ❌ |
 | Browser WebAssembly renderer | n/a | n/a | GPUI WebPlatform + wasm-bindgen |
+
+Range selection phase 1 (#5): click a cell to anchor the selection, Shift+click another to extend an inclusive rectangle. The Rust model retains stable row IDs and column keys, computes rectangle coordinates against the current sort/filter/column order, and hides highlighting rather than pointing at the wrong records when an endpoint is filtered out. Selection state drives GPUI cell backgrounds on desktop and in real WASM; drag gestures, multi-row selection, Ctrl+A and Shift+arrows are planned follow-ups.
 
 Editor v2: double-click a visible editable cell or select one and press **F2** / click **Edit cell**; a real Rust GPUI InputState is painted **inside the table cell**. Press Enter to commit; Tab/Shift+Tab commit and move to the next/previous editable cell; Esc or Cancel discard the draft. Save and Boolean controls remain available in the toolbar. Errors keep the editor active. We intentionally **do not auto-commit on blur**, avoiding IME composition loss. Numeric/boolean parsing and readonly enforcement remain in the Rust core. IME and platform-specific keyboard behavior still require broader coverage, so #4 remains open until fully verified.
 

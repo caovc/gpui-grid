@@ -20,6 +20,13 @@ mod wasm {
         gpui_grid::showcase::preview_visible_rows() as u32
     }
 
+    /// Actual Rust rectangular-selection extent used by Chromium tests.
+    /// This is read-only; JS cannot modify GridModel or simulate selection.
+    #[wasm_bindgen]
+    pub fn preview_selected_cell_count() -> u32 {
+        gpui_grid::showcase::preview_selected_cell_count()
+    }
+
     /// Read-only editor activity probe for the genuine GPUI Canvas E2E test.
     #[wasm_bindgen]
     pub fn preview_active_editor_row_id() -> u32 {

@@ -60,7 +60,14 @@ grid.set_filters(vec![Filter {
     column: "amount".into(),
     op: FilterOp::GreaterThan,
     value: Value::Number(5_000.0),
-}]).unwrap();`,
+}]).unwrap();
+
+// AG Grid-inspired Set Filter, independently implemented in Rust/GPUI.
+// OR for matching statuses, AND with the Revenue > 5000 condition.
+grid.set_column_values("status", vec![
+    Value::Text("Completed".into()),
+    Value::Text("Pending".into()),
+]).unwrap();`,
   },
   {
     id:'selection',group:'features',icon:'▤',en:'Cell Selection',title:'单元格选区 Cell Selection',short:'区域选择',

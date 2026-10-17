@@ -85,3 +85,65 @@ h1{font-size:clamp(27px,2.7vw,37px);line-height:1.23;letter-spacing:-1.15px;font
 @media (max-width:880px){.sidebar{position:fixed;left:0;top:0;width:268px;height:100vh;transform:translateX(-100%);transition:transform .2s;box-shadow:0 0 32px #072f322b}.sidebar-open .sidebar{transform:translateX(0)}.mobile-menu{display:block}.topbar{height:62px}.topbar-compile{display:none}.content-layout{padding:0 25px;max-width:none}.release-tag{display:inline}.frame-wrap{min-height:475px}}
 @media (max-width:650px){.topbar{padding:0 13px}.topbar-right{gap:7px}.topbar-section{display:none}.topbar-separator{display:none}.release-tag{display:none}.topbar-gh{padding:6px 8px}.content-layout{padding:0 13px}.feature-heading{padding-top:24px}.feature-summary{font-size:12px}.notice{padding:10px}.section-heading{display:block}.section-heading>p{text-align:left;max-width:none;margin-top:8px}.steps{grid-template-columns:1fr}.step-item{min-height:auto}.demo-hints{grid-template-columns:1fr}.playground-toolbar{height:auto;min-height:60px;flex-wrap:wrap;padding:6px 9px}.playground-actions{margin-bottom:5px}.runtime{font-size:8px}.tool-button span{display:none}.frame-wrap{height:490px;min-height:410px}.frame-footnote{display:none}.playground-foot{font-size:9px}.playground-code{min-height:400px}.playground-code pre{padding:15px;font-size:10px}.page-footer{display:block;line-height:2}.topbar-product{font-size:12px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+
+/* Desktop: docs and the real GPUI canvas should occupy the available
+   horizontal space instead of being constrained to a narrow centered column. */
+.main-shell{min-width:0;width:100%;max-width:none}
+.content-layout{
+  width:100%;max-width:none;
+  grid-template-columns:minmax(0,1fr) 158px;
+  gap:clamp(18px,1.8vw,30px);
+  padding-inline:clamp(20px,2vw,44px);
+}
+.doc-main{max-width:none;margin:0;min-width:0;width:100%}
+.feature-summary{max-width:1050px;font-size:13.5px;line-height:1.85}
+.notice p,.body-copy{font-size:12px}
+.section-heading>p{max-width:520px;font-size:11px}
+.frame-wrap{height:clamp(570px,75vh,1000px);min-height:570px}
+.playground-card{min-width:0;width:100%}
+.playground-code{
+  min-height:clamp(570px,75vh,1000px);
+  max-height:clamp(570px,75vh,1000px);
+  overflow:auto;
+  background:#121f2b;
+}
+.playground-code pre{
+  padding:26px 30px;
+  font-size:13px;line-height:1.9;
+  font-variant-ligatures:normal;
+  overflow:auto;
+  min-height:calc(clamp(570px,75vh,1000px) - 48px);
+  tab-size:4;
+  color:#cbd7e4;
+}
+.playground-code code{color:inherit;font-size:inherit;line-height:inherit;white-space:pre}
+.playground-code .rust-keyword{color:#c792ea;font-weight:650}
+.playground-code .rust-type{color:#82c9ff}
+.playground-code .rust-function{color:#82d9c3}
+.playground-code .rust-string{color:#e7c18b}
+.playground-code .rust-comment{color:#8096a6;font-style:italic}
+.playground-code .rust-number{color:#f0aa87}
+.playground-code .rust-macro{color:#f6c670}
+.playground-code .rust-attribute{color:#b1b8ff}
+.playground-code .rust-lifetime{color:#e7bd85}
+.syntax-label{
+  display:inline-block;margin-left:13px;
+  color:#74d9bf;font-size:9px;font-weight:800;letter-spacing:1px;
+  border:1px solid #3b605c;border-radius:4px;padding:3px 6px;
+}
+@media(max-width:1600px){
+  .page-toc{display:none}
+  .content-layout{grid-template-columns:minmax(0,1fr);gap:0;max-width:none}
+}
+@media(max-width:980px){
+  .content-layout{width:100%;padding-inline:24px}
+  .frame-wrap{height:72vh;min-height:520px}
+}
+@media(max-width:650px){
+  .content-layout{padding-inline:12px}
+  .frame-wrap{height:65svh;min-height:440px}
+  .playground-code{min-height:480px;max-height:65svh}
+  .playground-code pre{font-size:11px;padding:18px 14px;min-height:400px}
+  .syntax-label{display:none}
+}

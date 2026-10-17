@@ -1,5 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {PNG} from 'pngjs';
+import {openCustomerHeaderMenu} from './column-menu.mjs';
 
 /** The Canvas is drawn by Rust/GPUI, not by DOM elements. A screenshot is
  * required: the mere existence of a canvas does not prove a rendered frame. */
@@ -55,18 +56,32 @@ test('actual Rust/GPUI WebAssembly paints and handles real canvas click events',
     });
     const initial = await getRows();
     expect(initial).toBe(12_480);
-    // GPUI's two native buttons are right-aligned inside a 24px-padded
-    // header. Use Canvas pointer events, not a JS call to change the model.
-    // This exercises exactly the input path used by the desktop component.
-    const {width} = bounds;
-    await canvas.click({position: {x: width - 184, y: 35}});
-    await expect.poll(getRows, {timeout: 15_000, message: 'GPUI Completed button click must change Rust view'}).toBeLessThan(initial);
-    const filtered = await getRows();
-    expect(filtered).toBeGreaterThan(0);
-    const filteredImage = await canvas.screenshot();
-    await info.attach('gpui-grid-filtered.png', {body: filteredImage, contentType: 'image/png'});
-    await canvas.click({position: {x: width - 63, y: 35}});
-    await expect.poll(getRows, {timeout: 15_000, message: 'GPUI All rows button must restore Rust view'}).toBe(initial);
+    // The showcase has no toolbar buttons. Exercise the *reusable* GPUI
+    // column-header filter Popover using real Canvas pointer + keyboard input.
+    const readHeader = () => frame.locator('body').evaluate(async () => {
+      const wasm = await import('./pkg/gpui_grid_web.js');
+      return {
+        menu: wasm.preview_open_header_menu(),
+        action: wasm.preview_last_header_action(),
+      };
+    });
+    await openCustomerHeaderMenu(canvas, readHeader);
+    await page.keyboard.insertText('Sophia');
+    await page.keyboard.press('Enter');
+    await expect.poll(async () => (await readHeader()).action, {
+      timeout: 15_000, message: 'GPUI InputState filter must update Rust GridModel',
+    }).toMatch(/^filter:customer:enter:\d+$/);
+    const filterAction = (await readHeader()).action;
+    const filtered = Number(filterAction.split(':').at(-1));
+    expect(filtered, 'Rust typed column filter should reduce visible records').toBeGreaterThan(0);
+    expect(filtered).toBeLessThan(initial);
+    await info.attach('gpui-grid-native-column-filter.png', {
+      body: await canvas.screenshot(), contentType: 'image/png',
+    });
+    // A new WASM instance resets to its original dataset; no JS grid mutation.
+    await page.reload({waitUntil: 'domcontentloaded'});
+    await expect(runtime).toContainText('GPUI WASM initialized', {timeout: 100_000});
+    await expect.poll(getRows, {timeout: 15_000}).toBe(initial);
     expect(errors, 'uncaught WASM JavaScript errors').toEqual([]);
   } finally {
     await info.attach('browser-diagnostics.json', {

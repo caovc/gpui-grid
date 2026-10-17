@@ -49,6 +49,16 @@ test('docs shell navigates to per-feature real WASM and does not implement a JS 
   assert.doesNotMatch(shell, /sortRows|filterRows|renderCell/);
   assert.match(bootstrap, /pub fn run\(feature: Option<String>\)/);
   assert.match(build, /'catalog\.js'/);
+  assert.match(build, /'rust-highlight\.js'/);
+  const highlight = await readFile(new URL('./rust-highlight.js', import.meta.url), 'utf8');
+  const styles = await readFile(new URL('./styles.css', import.meta.url), 'utf8');
+  assert.match(shell, /renderRustHighlight\(/, 'Rust source has syntax colors');
+  assert.match(highlight, /export function tokenizeRust/);
+  assert.match(styles, /\.rust-keyword\{/);
+  assert.match(styles, /\.doc-main\{max-width:none/);
+  assert.match(styles, /\.frame-wrap\{height:clamp\(/);
+  const showcase = await readFile(new URL('../crates/gpui-grid/src/showcase.rs', import.meta.url), 'utf8');
+  assert.doesNotMatch(showcase, /Button::new\(/, 'no demo toolbar buttons');
   // JS is documentation only; never render a pseudo-grid row/cell.
   assert.doesNotMatch(shell, /document\.createElement\(['"](?:tr|td|table)['"]\)/);
   assert.doesNotMatch(shell, /render(?:Rows?|Cells?|Grid)|sortRows|new GridModel/);

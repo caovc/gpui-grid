@@ -1,4 +1,5 @@
 import { FEATURES, FEATURE_GROUPS, LIVE_FEATURES, byFeatureId } from './catalog.js';
+import { renderRustHighlight } from './rust-highlight.js';
 
 // IMPORTANT: This file only renders docs HTML and selects an actual Rust/GPUI
 // WASM showcase. It does NOT contain data rows, cell renderers, or JS Grid APIs.
@@ -152,7 +153,7 @@ function renderPage(feature) {
   renderList('#feature-steps', feature.steps, 'step');
   renderList('#api-rows', feature.api, 'api');
   renderList('#feature-notes', feature.notes, 'note');
-  $('#rust-example-code').textContent = feature.code.trim();
+  renderRustHighlight($('#rust-example-code'), feature.code.trim());
   $('#planned-description').textContent = feature.demoContext;
 
   const live = feature.status === 'live';

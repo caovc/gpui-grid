@@ -7,6 +7,8 @@ use gpui_kit::component::button::Button;
 use gpui_kit::component::input::{Escape, InputEvent, InputState};
 use gpui_kit::component::table::{DataTable, TableEvent, TableState};
 
+gpui_kit::actions!(gpui_grid, [CommitEditorNext, CommitEditorPrevious]);
+
 // Read-only diagnostics for the Chromium smoke test. The actual button and
 // editor handlers below publish counts after mutating the real Rust model.
 #[cfg(target_family = "wasm")]
@@ -74,6 +76,13 @@ pub struct GridShowcase {
 impl GridShowcase {
     /// Shared entry point for desktop and the browser's real GPUI WebPlatform.
     pub fn new(window: &mut Window, cx: &mut App) -> Entity<Self> {
+        // GPUI dispatches tab/shift-tab as key-bound actions before raw
+        // KeyDown events (Root and DataTable already bind these keys).
+        // This context exists only inside the active in-cell editor.
+        cx.bind_keys([
+            KeyBinding::new("tab", CommitEditorNext, Some("GPUIGridInlineEditor")),
+            KeyBinding::new("shift-tab", CommitEditorPrevious, Some("GPUIGridInlineEditor")),
+        ]);
         let data = sample_orders(12_480);
         publish_visible_rows(data.len());
         cx.new(|cx| {
@@ -244,8 +253,22 @@ impl GridShowcase {
         cx.notify();
     }
 
-    /// Capture editor keys before GPUI's built-in table navigation consumes them.
-    /// Escape cancels; Tab commits and advances to the next editable visible cell.
+    /// Tab action is dispatched to the editor's own key context before
+    /// DataTable/Root take focus. Invalid edits keep the editor open.
+    fn commit_and_advance(&mut self, backwards: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(address) = self.editor.as_ref().map(|session| session.address.clone()) else { return };
+        self.commit_edit(cx);
+        if self.editor.is_none() {
+            let next = self.table.read(cx).delegate().next_editable_cell(&address, backwards);
+            if let Some(info) = next {
+                self.selected = Some(info.address.clone());
+                self.start_edit(info, window, cx);
+            }
+        }
+    }
+
+    /// F2 is not bound by DataTable. Escape is intercepted as the input's
+    /// Escape action in Render because raw keydown is consumed by GPUI.
     fn on_grid_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         if event.is_held { return; }
         let key = event.keystroke.key.to_ascii_lowercase();
@@ -256,20 +279,6 @@ impl GridShowcase {
             }
             "escape" | "esc" if self.editor.is_some() => {
                 self.cancel_edit(cx);
-                cx.stop_propagation();
-            }
-            "tab" if self.editor.is_some() => {
-                let address = self.editor.as_ref().expect("editing").address.clone();
-                let backwards = event.keystroke.modifiers.shift;
-                self.commit_edit(cx);
-                // An invalid edit must retain focus and the error; no navigation.
-                if self.editor.is_none() {
-                    let next = self.table.read(cx).delegate().next_editable_cell(&address, backwards);
-                    if let Some(info) = next {
-                        self.selected = Some(info.address.clone());
-                        self.start_edit(info, window, cx);
-                    }
-                }
                 cx.stop_propagation();
             }
             _ => {}
@@ -303,6 +312,12 @@ impl Render for GridShowcase {
                 }
             }))
             .capture_key_down(cx.listener(Self::on_grid_key_down))
+            .on_action(cx.listener(|this, _: &CommitEditorNext, window, cx| {
+                this.commit_and_advance(false, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &CommitEditorPrevious, window, cx| {
+                this.commit_and_advance(true, window, cx);
+            }))
             .child(
                 div().flex().items_center().justify_between()
                     .px_6().py_4().bg(rgb(0xffffff))

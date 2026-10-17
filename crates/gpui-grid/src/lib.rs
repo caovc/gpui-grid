@@ -180,6 +180,9 @@ impl TableDelegate for GridDelegate {
         });
         if let Some(input) = inline_input {
             return div()
+                // A closer GPUI key context overrides DataTable's and Root's
+                // built-in Tab navigation only while this editor is mounted.
+                .key_context("GPUIGridInlineEditor")
                 .w_full().h_full().flex().items_center()
                 .bg(rgb(0xf3f6ff)).border_2().border_color(rgb(0x5269e9))
                 .child(Input::new(&input).appearance(false).bordered(false).flex_1())

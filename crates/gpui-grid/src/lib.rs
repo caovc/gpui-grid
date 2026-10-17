@@ -11,6 +11,7 @@ use gpui_grid_core::{GridError, GridModel, Sort, Value};
 use std::{cell::RefCell, rc::Rc};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::*;
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::component::table::{
     Column as UiColumn, ColumnSort, TableDelegate, TableState,
 };
